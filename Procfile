@@ -1,1 +1,1 @@
-worker: python obmen_bot_full_aiogram3_complete.py
+worker: python obmen_bot_full_aiogram3.py
