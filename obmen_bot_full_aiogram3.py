@@ -21,8 +21,8 @@ from aiogram.fsm.context import FSMContext
 # --------------------
 # Sozlamalar
 # --------------------
-API_TOKEN = "TOKENNI_BU_YERGA_QO'Y"  # <-- TOKENINGNI shu yerga yoz
-ADMIN_ID = 1234567890                 # <-- ADMIN_ID ni shu yerga yoz
+API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"  # <-- TOKENINGNI shu yerga yoz
+ADMIN_ID = 7973934849             # <-- ADMIN_ID ni shu yerga yoz
 
 if not API_TOKEN:
     raise RuntimeError("BOT_TOKEN kerak — environment variable sifatida qo'shing yoki kodga yozing.")
