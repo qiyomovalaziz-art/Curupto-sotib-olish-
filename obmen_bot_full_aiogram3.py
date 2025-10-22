@@ -1,5 +1,11 @@
-# obmen_bot_full_aiogram3_complete.py
+# obmen_bot_full_aiogram3_complete_with_token.py
 # -*- coding: utf-8 -*-
+"""
+To'liq AIogram 3 bot fayli — chek yuborish ishlaydi (photo yoki document),
+admin tasdiqlashi uchun buyurtma forward qilinadi.
+TOKEN kod ichiga joylangan — xavfsizlik uchun ehtiyot bo'ling.
+"""
+
 import os
 import json
 import time
@@ -19,15 +25,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 
 # --------------------
-# Sozlamalar (ENV orqali)
+# Sozlamalar (TOKEN shu yerda)
 # --------------------
-# Railway yoki lokalda: BOT_TOKEN ni Environment Variables ga qo'ying
-API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
-# Agar ADMIN_ID ENV da bo'lsa, o'shani ishlatamiz, aks holda 7973934849 (istalgan raqam) ishlatiladi
+API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"  # <--- siz bergan token (ehtiyot bo'ling!)
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7973934849"))
 
 if not API_TOKEN:
-    raise RuntimeError("BOT_TOKEN muhim — environment variable sifatida qo'shing.")
+    raise RuntimeError("BOT_TOKEN muhim — environment variable sifatida qo'shing yoki API_TOKEN o'zgartiring.")
 
 DATA_DIR = "bot_data"
 CURRENCIES_FILE = os.path.join(DATA_DIR, "currencies.json")
@@ -71,6 +75,11 @@ def save_json(path: str, data: Any):
 currencies: Dict[str, Dict[str, Any]] = load_json(CURRENCIES_FILE, {})
 users: Dict[str, Dict[str, Any]] = load_json(USERS_FILE, {})
 orders: Dict[str, Dict[str, Any]] = load_json(ORDERS_FILE, {})
+
+# Example default currency (agar xohlasangiz avtomatik qo'shish uchun izohni olib tashlang)
+# if not currencies:
+#     currencies["USD"] = {"buy_rate": 12000.0, "sell_rate": 11900.0, "buy_card": "5614 6818 7267 2690", "sell_card": "5614 6818 7267 2690"}
+#     save_json(CURRENCIES_FILE, currencies)
 
 # --------------------
 # States
@@ -129,7 +138,7 @@ def ensure_user(uid: int, tg_user: types.User = None) -> Dict[str, Any]:
 def new_order_id() -> str:
     return str(int(time.time() * 1000))
 
-# Keyboard helper (aiogram 3 talabiga mos)
+# Keyboard helper
 def make_keyboard(rows):
     """rows: list of lists of button texts, e.g. [['A','B'], ['C']]"""
     if not rows or not isinstance(rows, list):
@@ -227,24 +236,34 @@ async def buy_wallet(message: types.Message, state: FSMContext, bot: Bot):
     )
     await state.set_state(BuyFSM.confirm)
 
+# Text handler for confirm state (asks user to upload file if needed)
 @router.message(BuyFSM.confirm)
-async def buy_confirm(message: types.Message, state: FSMContext, bot: Bot):
+async def buy_confirm(message: types.Message, state: FSMContext):
     if message.text == "⏹️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
-    if message.text != "Chek yuborish":
-        await message.answer("Iltimos faqat 'Chek yuborish' tugmasini bosing.")
+    if message.text == "Chek yuborish":
+        await message.answer("Iltimos, chekni rasm yoki fayl sifatida yuboring (photo yoki document).")
+        return
+    await message.answer("Iltimos faqat 'Chek yuborish' tugmasini bosing yoki chekni rasm/fayl sifatida yuboring.")
+
+# File/photo handler for confirm state — this creates the order and forwards the chek to admin
+@router.message(BuyFSM.confirm, content_types=['photo', 'document'])
+async def buy_confirm_file(message: types.Message, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    if not data or "currency" not in data or "amount" not in data:
+        await message.answer("Buyurtma ma'lumotlari topilmadi. Iltimos qayta boshlang.", reply_markup=main_menu_kb(message.from_user.id))
+        await state.clear()
         return
 
-    data = await state.get_data()
     order_id = new_order_id()
     order = {
         "id": order_id,
         "user_id": message.from_user.id,
         "currency": data["currency"],
         "amount": data["amount"],
-        "wallet": data["wallet"],
+        "wallet": data.get("wallet", ""),
         "type": "buy",
         "status": "waiting_admin",
         "created_at": int(time.time()),
@@ -262,17 +281,25 @@ async def buy_confirm(message: types.Message, state: FSMContext, bot: Bot):
         ]
     )
 
-    # notify admin
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"Yangi buyurtma!\nFoydalanuvchi: {message.from_user.full_name}\nID: {message.from_user.id}\nValyuta: {data['currency']}\nMiqdor: {data['amount']}\nHamyon: {data['wallet']}\nBuyurtma ID: {order_id}",
-            reply_markup=kb
-        )
-    except Exception:
-        logger.exception("Adminga xabar yuborishda xato:")
+    order_text = (
+        f"Yangi buyurtma!\n"
+        f"Foydalanuvchi: {message.from_user.full_name}\n"
+        f"ID: {message.from_user.id}\n"
+        f"Valyuta: {data['currency']}\n"
+        f"Miqdor: {data['amount']}\n"
+        f"Hamyon: {data.get('wallet','')}\n"
+        f"Buyurtma ID: {order_id}"
+    )
 
-    await message.answer("✅ Buyurtma adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    try:
+        # send order info with inline buttons
+        await bot.send_message(ADMIN_ID, order_text, reply_markup=kb)
+        # forward the actual message (photo/document) so admin can see the chek
+        await bot.forward_message(ADMIN_ID, message.from_user.id, message.message_id)
+    except Exception:
+        logger.exception("Adminga buyurtma yoki chek yuborishda xato:")
+
+    await message.answer("✅ Buyurtma va chek adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
     await state.clear()
 
 # --------------------
@@ -339,23 +366,31 @@ async def sell_wallet(message: types.Message, state: FSMContext, bot: Bot):
     await state.set_state(SellFSM.confirm)
 
 @router.message(SellFSM.confirm)
-async def sell_confirm(message: types.Message, state: FSMContext, bot: Bot):
+async def sell_confirm(message: types.Message, state: FSMContext):
     if message.text == "⏹️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
-    if message.text != "Chek yuborish":
-        await message.answer("Iltimos faqat 'Chek yuborish' tugmasini bosing.")
+    if message.text == "Chek yuborish":
+        await message.answer("Iltimos, chekni rasm yoki fayl sifatida yuboring (photo yoki document).")
+        return
+    await message.answer("Iltimos faqat 'Chek yuborish' tugmasini bosing yoki chekni rasm/fayl sifatida yuboring.")
+
+@router.message(SellFSM.confirm, content_types=['photo', 'document'])
+async def sell_confirm_file(message: types.Message, state: FSMContext, bot: Bot):
+    data = await state.get_data()
+    if not data or "currency" not in data or "amount" not in data:
+        await message.answer("Buyurtma ma'lumotlari topilmadi. Iltimos qayta boshlang.", reply_markup=main_menu_kb(message.from_user.id))
+        await state.clear()
         return
 
-    data = await state.get_data()
     order_id = new_order_id()
     order = {
         "id": order_id,
         "user_id": message.from_user.id,
         "currency": data["currency"],
         "amount": data["amount"],
-        "wallet": data["wallet"],
+        "wallet": data.get("wallet", ""),
         "type": "sell",
         "status": "waiting_admin",
         "created_at": int(time.time()),
@@ -373,16 +408,23 @@ async def sell_confirm(message: types.Message, state: FSMContext, bot: Bot):
         ]
     )
 
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"Yangi sell buyurtma!\nFoydalanuvchi: {message.from_user.full_name}\nID: {message.from_user.id}\nValyuta: {data['currency']}\nMiqdor: {data['amount']}\nHamyon: {data['wallet']}\nBuyurtma ID: {order_id}",
-            reply_markup=kb
-        )
-    except Exception:
-        logger.exception("Adminga sell buyurtma xabari yuborishda xato:")
+    order_text = (
+        f"Yangi sell buyurtma!\n"
+        f"Foydalanuvchi: {message.from_user.full_name}\n"
+        f"ID: {message.from_user.id}\n"
+        f"Valyuta: {data['currency']}\n"
+        f"Miqdor: {data['amount']}\n"
+        f"Hamyon: {data.get('wallet','')}\n"
+        f"Buyurtma ID: {order_id}"
+    )
 
-    await message.answer("✅ Buyurtma adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    try:
+        await bot.send_message(ADMIN_ID, order_text, reply_markup=kb)
+        await bot.forward_message(ADMIN_ID, message.from_user.id, message.message_id)
+    except Exception:
+        logger.exception("Adminga sell buyurtma yoki chek yuborishda xato:")
+
+    await message.answer("✅ Buyurtma va chek adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
     await state.clear()
 
 # --------------------
