@@ -249,7 +249,7 @@ async def buy_confirm(message: types.Message, state: FSMContext):
     await message.answer("Iltimos faqat 'Chek yuborish' tugmasini bosing yoki chekni rasm/fayl sifatida yuboring.")
 
 # File/photo handler for confirm state — this creates the order and forwards the chek to admin
-@router.message(BuyFSM.confirm, content_types=['photo', 'document'])
+@router.message(BuyFSM.confirm, lambda m: m.content_type in ['photo', 'document'])
 async def buy_confirm_file(message: types.Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
     if not data or "currency" not in data or "amount" not in data:
