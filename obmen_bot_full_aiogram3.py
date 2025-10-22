@@ -7,7 +7,10 @@ import logging
 import asyncio
 
 from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import (
+    ReplyKeyboardMarkup, KeyboardButton,
+    InlineKeyboardMarkup, InlineKeyboardButton
+)
 from aiogram.filters import Command
 from aiogram import Router
 
@@ -16,11 +19,22 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 
 # --------------------
-# Sozlamalar
+# Configuration (from environment)
 # --------------------
-os.environ["TZ"] = "Asia/Tashkent"
+os.environ.setdefault("TZ", "Asia/Tashkent")
+
 API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
-ADMIN_ID = 7973934849
+ADMIN_ID_ENV = 7973934849
+
+if not API_TOKEN:
+    raise RuntimeError("API_TOKEN muhim! Iltimos TELEGRAM token-ni ENV ga qo'ying (API_TOKEN).")
+
+try:
+    ADMIN_ID = int(ADMIN_ID_ENV) if ADMIN_ID_ENV else None
+except:
+    ADMIN_ID = None
+
+# local data files
 DATA_DIR = "bot_data"
 CURRENCIES_FILE = os.path.join(DATA_DIR, "currencies.json")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
@@ -28,7 +42,7 @@ ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # --------------------
-# Logging & bot init
+# Logging & init
 # --------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,26 +55,31 @@ router = Router()
 # --------------------
 def load_json(path, default):
     if not os.path.exists(path):
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False, indent=2)
-        return default
-    with open(path, "r", encoding="utf-8") as f:
         try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(default, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-        except:
-            return default
+    except Exception:
+        return default
 
 def save_json(path, data):
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.exception("Faylga yozishda xato: %s", path)
 
 # --------------------
-# Data stores (RAM mirrors)
+# Data stores (RAM)
 # --------------------
 currencies = load_json(CURRENCIES_FILE, {})
 users = load_json(USERS_FILE, {})
 orders = load_json(ORDERS_FILE, {})
-sessions = {}
 
 # --------------------
 # FSM
@@ -100,8 +119,8 @@ class BroadcastFSM(StatesGroup):
 # --------------------
 def is_admin(uid):
     try:
-        return int(uid) == int(ADMIN_ID)
-    except:
+        return ADMIN_ID is not None and int(uid) == int(ADMIN_ID)
+    except Exception:
         return False
 
 def ensure_user(uid, tg_user=None):
@@ -118,14 +137,14 @@ def ensure_user(uid, tg_user=None):
 
 def main_menu_kb(uid=None):
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(KeyboardButton("ð² Sotib olish"), KeyboardButton("ð° Sotish"))
+    kb.row(KeyboardButton("💲 Sotib olish"), KeyboardButton("💱 Sotish"))
     if uid and is_admin(uid):
-        kb.add(KeyboardButton("âï¸ Admin Panel"))
+        kb.add(KeyboardButton("🛠️ Admin Panel"))
     return kb
 
 def back_kb():
     kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
+    kb.add(KeyboardButton("↩️ Bekor qilish"))
     return kb
 
 def new_order_id():
@@ -139,16 +158,16 @@ async def cmd_start(message: types.Message):
     uid = message.from_user.id
     user = ensure_user(uid, message.from_user)
     await message.answer(
-        f"Assalomu alaykum, {user['name']}! ð\nXush kelibsiz botimizga. Pastdagi tugma orqali curupto valuta sotib olishingiz va sotishingiz mumkin.",
+        f"Assalomu alaykum, {user.get('name','Foydalanuvchi')}! 👋\n"
+        "Pastdagi tugma orqali valuta sotib olishingiz yoki sotishingiz mumkin.",
         reply_markup=main_menu_kb(uid)
     )
 
 # --------------------
-# Sotib olish (Buy)
+# Buy flow
 # --------------------
-@router.message(lambda message: message.text and message.text == "ð² Sotib olish")
+@router.message(lambda message: message.text and message.text == "💲 Sotib olish")
 async def buy_start(message: types.Message, state: FSMContext):
-    uid = message.from_user.id
     if not currencies:
         await message.answer("Hozircha valyuta mavjud emas. Iltimos admin bilan bog'laning.")
         return
@@ -162,14 +181,14 @@ async def buy_start(message: types.Message, state: FSMContext):
             row_buttons = []
     if row_buttons:
         kb.row(*row_buttons)
-    kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
+    kb.add(KeyboardButton("↩️ Bekor qilish"))
 
     await message.answer("Qaysi valyutani sotib olmoqchisiz?", reply_markup=kb)
     await BuyFSM.choose_currency.set()
 
 @router.message(BuyFSM.choose_currency)
 async def choose_currency_buy(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
@@ -184,7 +203,7 @@ async def choose_currency_buy(message: types.Message, state: FSMContext):
 async def amount_handler_buy(message: types.Message, state: FSMContext):
     try:
         amt = float(message.text.replace(",", "."))
-    except:
+    except Exception:
         await message.answer("Iltimos raqam kiriting.")
         return
     data = await state.get_data()
@@ -195,26 +214,24 @@ async def amount_handler_buy(message: types.Message, state: FSMContext):
 
 @router.message(BuyFSM.wallet)
 async def wallet_handler_buy(message: types.Message, state: FSMContext):
-    # This handler is triggered for wallet input
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
 
     data = await state.get_data()
-    # update wallet
     data["wallet"] = message.text
     await state.set_data(data)
 
     currency = data["currency"]
     amt = data["amount"]
-    rate = currencies[currency].get("buy_rate", 0)
-    card = currencies[currency].get("buy_card", "5614 6818 7267 2690")
-    total = amt * rate
+    rate = currencies.get(currency, {}).get("buy_rate", 0)
+    card = currencies.get(currency, {}).get("buy_card", "5614 6818 7267 2690")
+    total = amt * rate if amt is not None else 0
 
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add(KeyboardButton("Chek yuborish"))
-    kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
+    kb.add(KeyboardButton("↩️ Bekor qilish"))
 
     await message.answer(
         f"{amt} {currency} uchun to'lovni quyidagi karta raqamiga qiling:\n{card}\n\nJami to'lov: {total} UZS",
@@ -224,7 +241,7 @@ async def wallet_handler_buy(message: types.Message, state: FSMContext):
 
 @router.message(BuyFSM.confirm)
 async def confirm_handler_buy(message: types.Message, state: FSMContext, bot: Bot):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
@@ -242,37 +259,39 @@ async def confirm_handler_buy(message: types.Message, state: FSMContext, bot: Bo
         "type": "buy",
         "status": "waiting_admin",
         "created_at": int(time.time()),
-        "rate": currencies[data["currency"]].get("buy_rate")
+        "rate": currencies.get(data["currency"], {}).get("buy_rate")
     }
     orders[order_id] = order
-    user_orders = users.setdefault(str(message.from_user.id), {"id": message.from_user.id, "orders": []})
-    user_orders.setdefault("orders", []).append(order_id)
+    users.setdefault(str(message.from_user.id), {"id": message.from_user.id, "orders": []})
+    users[str(message.from_user.id)].setdefault("orders", []).append(order_id)
     save_json(ORDERS_FILE, orders)
     save_json(USERS_FILE, users)
 
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("â Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"))
-    kb.add(InlineKeyboardButton("â Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
+    kb.add(InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"))
+    kb.add(InlineKeyboardButton("❌ Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
 
     # notify admin
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"Yangi buyurtma!\nFoydalanuvchi: {message.from_user.full_name}\nID: {message.from_user.id}\nValyuta: {data['currency']}\nMiqdor: {data['amount']}\nHamyon: {data['wallet']}\nBuyurtma ID: {order_id}",
-            reply_markup=kb
-        )
-    except Exception as e:
-        logger.exception("Adminga xabar yuborishda xato:")
+    if ADMIN_ID:
+        try:
+            await bot.send_message(
+                ADMIN_ID,
+                f"Yangi buyurtma!\nFoydalanuvchi: {message.from_user.full_name}\nID: {message.from_user.id}\nValyuta: {data['currency']}\nMiqdor: {data['amount']}\nHamyon: {data['wallet']}\nBuyurtma ID: {order_id}",
+                reply_markup=kb
+            )
+        except Exception:
+            logger.exception("Adminga xabar yuborishda xato:")
+    else:
+        logger.warning("ADMIN_ID o'rnatilmagan - adminga xabar yuborilmadi.")
 
-    await message.answer("â Buyurtma adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await message.answer("✅ Buyurtma adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
     await state.clear()
 
 # --------------------
-# Sotish (Sell)
+# Sell flow
 # --------------------
-@router.message(lambda message: message.text and message.text == "ð° Sotish")
+@router.message(lambda message: message.text and message.text == "💱 Sotish")
 async def sell_start(message: types.Message):
-    uid = message.from_user.id
     if not currencies:
         await message.answer("Hozircha valyuta mavjud emas. Iltimos admin bilan bog'laning.")
         return
@@ -286,14 +305,14 @@ async def sell_start(message: types.Message):
             row_buttons = []
     if row_buttons:
         kb.row(*row_buttons)
-    kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
+    kb.add(KeyboardButton("↩️ Bekor qilish"))
 
     await message.answer("Qaysi valyutani sotmoqchisiz?", reply_markup=kb)
     await SellFSM.choose_currency.set()
 
 @router.message(SellFSM.choose_currency)
 async def choose_currency_sell(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
@@ -308,7 +327,7 @@ async def choose_currency_sell(message: types.Message, state: FSMContext):
 async def amount_handler_sell(message: types.Message, state: FSMContext):
     try:
         amt = float(message.text.replace(",", "."))
-    except:
+    except Exception:
         await message.answer("Iltimos raqam kiriting.")
         return
     data = await state.get_data()
@@ -319,7 +338,7 @@ async def amount_handler_sell(message: types.Message, state: FSMContext):
 
 @router.message(SellFSM.wallet)
 async def wallet_handler_sell(message: types.Message, state: FSMContext, bot: Bot):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
@@ -330,13 +349,13 @@ async def wallet_handler_sell(message: types.Message, state: FSMContext, bot: Bo
 
     currency = data["currency"]
     amt = data["amount"]
-    rate = currencies[currency].get("sell_rate", 0)
-    card = currencies[currency].get("sell_card", "5614 6818 7267 2690")
-    total = amt * rate
+    rate = currencies.get(currency, {}).get("sell_rate", 0)
+    card = currencies.get(currency, {}).get("sell_card", "5614 6818 7267 2690")
+    total = amt * rate if amt is not None else 0
 
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add(KeyboardButton("Chek yuborish"))
-    kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
+    kb.add(KeyboardButton("↩️ Bekor qilish"))
 
     await message.answer(
         f"{amt} {currency} sotish uchun to'lovni quyidagi karta raqamiga qiling:\n{card}\n\nJami to'lov: {total} UZS",
@@ -346,7 +365,7 @@ async def wallet_handler_sell(message: types.Message, state: FSMContext, bot: Bo
 
 @router.message(SellFSM.confirm)
 async def confirm_handler_sell(message: types.Message, state: FSMContext, bot: Bot):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
         return
@@ -365,28 +384,31 @@ async def confirm_handler_sell(message: types.Message, state: FSMContext, bot: B
         "type": "sell",
         "status": "waiting_admin",
         "created_at": int(time.time()),
-        "rate": currencies[data["currency"]].get("sell_rate")
+        "rate": currencies.get(data["currency"], {}).get("sell_rate")
     }
     orders[order_id] = order
-    user_orders = users.setdefault(str(message.from_user.id), {"id": message.from_user.id, "orders": []})
-    user_orders.setdefault("orders", []).append(order_id)
+    users.setdefault(str(message.from_user.id), {"id": message.from_user.id, "orders": []})
+    users[str(message.from_user.id)].setdefault("orders", []).append(order_id)
     save_json(ORDERS_FILE, orders)
     save_json(USERS_FILE, users)
 
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("â Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"))
-    kb.add(InlineKeyboardButton("â Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
+    kb.add(InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"))
+    kb.add(InlineKeyboardButton("❌ Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
 
-    try:
-        await bot.send_message(
-            ADMIN_ID,
-            f"Yangi sell buyurtma!\nFoydalanuvchi: {message.from_user.full_name}\nID: {message.from_user.id}\nValyuta: {data['currency']}\nMiqdor: {data['amount']}\nHamyon: {data['wallet']}\nBuyurtma ID: {order_id}",
-            reply_markup=kb
-        )
-    except Exception:
-        logger.exception("Adminga sell buyurtma xabari yuborishda xato:")
+    if ADMIN_ID:
+        try:
+            await bot.send_message(
+                ADMIN_ID,
+                f"Yangi sell buyurtma!\nFoydalanuvchi: {message.from_user.full_name}\nID: {message.from_user.id}\nValyuta: {data['currency']}\nMiqdor: {data['amount']}\nHamyon: {data['wallet']}\nBuyurtma ID: {order_id}",
+                reply_markup=kb
+            )
+        except Exception:
+            logger.exception("Adminga sell buyurtma xabari yuborishda xato:")
+    else:
+        logger.warning("ADMIN_ID o'rnatilmagan - adminga xabar yuborilmadi.")
 
-    await message.answer("â Buyurtma adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await message.answer("✅ Buyurtma adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
     await state.clear()
 
 # --------------------
@@ -394,11 +416,13 @@ async def confirm_handler_sell(message: types.Message, state: FSMContext, bot: B
 # --------------------
 @router.callback_query(lambda c: c.data and c.data.startswith("admin_order"))
 async def admin_order_cb(callback: types.CallbackQuery, bot: Bot):
-    parts = callback.data.split("|")
+    data_str = callback.data or ""
+    parts = data_str.split("|")
+    # Expected: ["admin_order", "confirm"/"reject", "<order_id>"]
     if len(parts) != 3:
         await callback.answer("Xato callback")
         return
-    action, order_id = parts[1], parts[2]
+    _, action, order_id = parts
     order = orders.get(order_id)
     if not order:
         await callback.answer("Buyurtma topilmadi")
@@ -407,7 +431,7 @@ async def admin_order_cb(callback: types.CallbackQuery, bot: Bot):
         order["status"] = "confirmed"
         save_json(ORDERS_FILE, orders)
         try:
-            await bot.send_message(order["user_id"], f"Sizning buyurtmangiz tasdiqlandi â")
+            await bot.send_message(order["user_id"], "Sizning buyurtmangiz tasdiqlandi ✅")
         except Exception:
             logger.exception("Foydalanuvchiga confirm xabari yuborishda xato:")
         await callback.answer("Tasdiqlandi")
@@ -415,120 +439,113 @@ async def admin_order_cb(callback: types.CallbackQuery, bot: Bot):
         order["status"] = "rejected"
         save_json(ORDERS_FILE, orders)
         try:
-            await bot.send_message(order["user_id"], f"Sizning buyurtmangiz bekor qilindi â")
+            await bot.send_message(order["user_id"], "Sizning buyurtmangiz bekor qilindi ❌")
         except Exception:
             logger.exception("Foydalanuvchiga reject xabari yuborishda xato:")
         await callback.answer("Bekor qilindi")
 
 # --------------------
-# Admin panel start
+# Admin panel
 # --------------------
-@router.message(lambda message: message.text and message.text == "âï¸ Admin Panel")
+@router.message(lambda message: message.text and message.text == "🛠️ Admin Panel")
 async def admin_panel_start(message: types.Message, state: FSMContext):
     if not is_admin(message.from_user.id):
         await message.answer("Siz admin emassiz.")
         return
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add(KeyboardButton("â Valyuta qoâshish"), KeyboardButton("âï¸ Valyuta nomini oâzgartirish"))
-    kb.add(KeyboardButton("ð° Valyuta kursini oâzgartirish"), KeyboardButton("ð³ Valyuta karta raqamini oâzgartirish"))
-    kb.add(KeyboardButton("ðï¸ Valyuta oâchirish"))
-    kb.add(KeyboardButton("ð¢ Xabar yuborish"))
-    kb.add(KeyboardButton("â¹ï¸ Orqaga"))
+    kb.add(KeyboardButton("➕ Valyuta qo'shish"), KeyboardButton("✏️ Valyuta nomini o'zgartirish"))
+    kb.add(KeyboardButton("💱 Valyuta kursini o'zgartirish"), KeyboardButton("💳 Valyuta karta raqamini o'zgartirish"))
+    kb.add(KeyboardButton("🗑️ Valyuta o'chirish"))
+    kb.add(KeyboardButton("📢 Xabar yuborish"))
+    kb.add(KeyboardButton("↩️ Orqaga"))
     await message.answer("Admin panel:", reply_markup=kb)
     await AdminFSM.main.set()
 
-# --------------------
 # Broadcast (admin)
-# --------------------
-@router.message(lambda message: message.text and message.text == "ð¢ Xabar yuborish", AdminFSM.main)
+@router.message(lambda message: message.text and message.text == "📢 Xabar yuborish", AdminFSM.main)
 async def start_broadcast(message: types.Message, state: FSMContext):
     await message.answer("Yuboriladigan xabar matnini kiriting:", reply_markup=back_kb())
     await BroadcastFSM.waiting_message.set()
 
 @router.message(BroadcastFSM.waiting_message)
 async def send_broadcast(message: types.Message, state: FSMContext, bot: Bot):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
-        # return to admin panel
         await admin_panel_start(message, state)
         return
 
     text = message.text
     count = 0
     failed = 0
-    for uid in list(users.keys()):
+    for uid_str in list(users.keys()):
         try:
-            await bot.send_message(int(uid), text)
+            await bot.send_message(int(uid_str), text)
             count += 1
         except Exception:
             failed += 1
             continue
 
-    await message.answer(f"â Xabar {count} ta foydalanuvchiga yuborildi.\nâ {failed} ta foydalanuvchiga yuborilmadi.", reply_markup=back_kb())
+    await message.answer(f"✅ Xabar {count} ta foydalanuvchiga yuborildi.\n❌ {failed} ta foydalanuvchiga yuborilmadi.", reply_markup=back_kb())
     await state.clear()
     await admin_panel_start(message, state)
 
-# --------------------
-# Admin main FSM handlers (menu actions)
-# --------------------
+# Admin main menu actions (AdminFSM.main)
 @router.message(AdminFSM.main)
 async def admin_main(message: types.Message, state: FSMContext):
     text = message.text
-    if text == "â Valyuta qoâshish":
+    if text == "➕ Valyuta qo'shish":
         await message.answer("Valyuta nomini kiriting:", reply_markup=back_kb())
         await AdminFSM.add_name.set()
-    elif text == "âï¸ Valyuta nomini oâzgartirish":
+    elif text == "✏️ Valyuta nomini o'zgartirish":
         if not currencies:
             await message.answer("Hozircha valyuta mavjud emas.", reply_markup=back_kb())
             return
         kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         for cur in currencies.keys():
             kb.add(KeyboardButton(cur))
-        kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
-        await message.answer("Qaysi valyuta nomini oâzgartirmoqchisiz?", reply_markup=kb)
+        kb.add(KeyboardButton("↩️ Bekor qilish"))
+        await message.answer("Qaysi valyuta nomini o'zgartirmoqchisiz?", reply_markup=kb)
         await AdminFSM.edit_choose.set()
-    elif text == "ð° Valyuta kursini oâzgartirish":
+    elif text == "💱 Valyuta kursini o'zgartirish":
         if not currencies:
             await message.answer("Hozircha valyuta mavjud emas.", reply_markup=back_kb())
             return
         kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         for cur in currencies.keys():
             kb.add(KeyboardButton(cur))
-        kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
-        await message.answer("Qaysi valyuta kursini oâzgartirmoqchisiz?", reply_markup=kb)
+        kb.add(KeyboardButton("↩️ Bekor qilish"))
+        await message.answer("Qaysi valyuta kursini o'zgartirmoqchisiz?", reply_markup=kb)
         await AdminFSM.edit_rate_choose.set()
-    elif text == "ð³ Valyuta karta raqamini oâzgartirish":
+    elif text == "💳 Valyuta karta raqamini o'zgartirish":
         if not currencies:
             await message.answer("Hozircha valyuta mavjud emas.", reply_markup=back_kb())
             return
         kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         for cur in currencies.keys():
             kb.add(KeyboardButton(cur))
-        kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
-        await message.answer("Qaysi valyuta karta raqamini oâzgartirmoqchisiz?", reply_markup=kb)
+        kb.add(KeyboardButton("↩️ Bekor qilish"))
+        await message.answer("Qaysi valyuta karta raqamini o'zgartirmoqchisiz?", reply_markup=kb)
         await AdminFSM.edit_card_choose.set()
-    elif text == "ðï¸ Valyuta oâchirish":
+    elif text == "🗑️ Valyuta o'chirish":
         if not currencies:
             await message.answer("Hozircha valyuta mavjud emas.", reply_markup=back_kb())
             return
         kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         for cur in currencies.keys():
             kb.add(KeyboardButton(cur))
-        kb.add(KeyboardButton("â¹ï¸ Bekor qilish"))
-        await message.answer("Qaysi valyutani oâchirmoqchisiz?", reply_markup=kb)
+        kb.add(KeyboardButton("↩️ Bekor qilish"))
+        await message.answer("Qaysi valyutani o'chirmoqchisiz?", reply_markup=kb)
         await AdminFSM.delete_choose.set()
-    elif text == "â¹ï¸ Orqaga":
+    elif text == "↩️ Orqaga":
         await state.clear()
         await message.answer("Bosh menyu:", reply_markup=main_menu_kb(message.from_user.id))
     else:
-        await message.answer("Notoâgâri tugma. Qaytadan tanlang.")
+        await message.answer("Noto'g'ri tugma. Qaytadan tanlang.")
 
-# --------------------
-# Valyuta qoâshish
-# --------------------
+# Add currency flow
 @router.message(AdminFSM.add_name)
 async def add_currency_name(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
@@ -538,14 +555,14 @@ async def add_currency_name(message: types.Message, state: FSMContext):
 
 @router.message(AdminFSM.add_buy_rate)
 async def add_currency_buy_rate(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
     try:
         rate = float(message.text.replace(",", "."))
-    except:
-        await message.answer("Iltimos toâgâri raqam kiriting.")
+    except Exception:
+        await message.answer("Iltimos to'g'ri raqam kiriting.")
         return
     await state.update_data(buy_rate=rate)
     await message.answer("Valyuta sotish kursini kiriting:", reply_markup=back_kb())
@@ -553,14 +570,14 @@ async def add_currency_buy_rate(message: types.Message, state: FSMContext):
 
 @router.message(AdminFSM.add_sell_rate)
 async def add_currency_sell_rate(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
     try:
         rate = float(message.text.replace(",", "."))
-    except:
-        await message.answer("Iltimos toâgâri raqam kiriting.")
+    except Exception:
+        await message.answer("Iltimos to'g'ri raqam kiriting.")
         return
     await state.update_data(sell_rate=rate)
     await message.answer("Sotib olish karta raqamini kiriting:", reply_markup=back_kb())
@@ -568,7 +585,7 @@ async def add_currency_sell_rate(message: types.Message, state: FSMContext):
 
 @router.message(AdminFSM.add_buy_card)
 async def add_currency_buy_card(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
@@ -578,28 +595,32 @@ async def add_currency_buy_card(message: types.Message, state: FSMContext):
 
 @router.message(AdminFSM.add_sell_card)
 async def add_currency_sell_card(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
     data = await state.get_data()
-    currencies[data["new_name"]] = {
-        "buy_rate": data["buy_rate"],
-        "sell_rate": data["sell_rate"],
-        "buy_card": data["buy_card"],
+    name = data.get("new_name")
+    if not name:
+        await message.answer("Noma'lum xatolik, qaytadan boshlang.")
+        await state.clear()
+        await admin_panel_start(message, state)
+        return
+    currencies[name] = {
+        "buy_rate": data.get("buy_rate"),
+        "sell_rate": data.get("sell_rate"),
+        "buy_card": data.get("buy_card"),
         "sell_card": message.text
     }
     save_json(CURRENCIES_FILE, currencies)
-    await message.answer(f"{data['new_name']} qoâshildi! Buy: {data['buy_rate']} ({data['buy_card']}), Sell: {data['sell_rate']} ({message.text})", reply_markup=back_kb())
+    await message.answer(f"{name} qo'shildi! Buy: {data.get('buy_rate')} ({data.get('buy_card')}), Sell: {data.get('sell_rate')} ({message.text})", reply_markup=back_kb())
     await state.clear()
     await admin_panel_start(message, state)
 
-# --------------------
-# Valyuta nomini oâzgartirish
-# --------------------
+# Edit name
 @router.message(AdminFSM.edit_choose)
 async def edit_currency_choose(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
@@ -612,23 +633,27 @@ async def edit_currency_choose(message: types.Message, state: FSMContext):
 
 @router.message(AdminFSM.edit_name)
 async def edit_currency_name(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
     data = await state.get_data()
-    currencies[message.text] = currencies.pop(data["edit_name_old"])
+    old = data.get("edit_name_old")
+    if not old or old not in currencies:
+        await message.answer("Xatolik: eski nom topilmadi.")
+        await state.clear()
+        await admin_panel_start(message, state)
+        return
+    currencies[message.text] = currencies.pop(old)
     save_json(CURRENCIES_FILE, currencies)
-    await message.answer(f"{data['edit_name_old']} nomi {message.text} ga oâzgartirildi.", reply_markup=back_kb())
+    await message.answer(f"{old} nomi {message.text} ga o'zgartirildi.", reply_markup=back_kb())
     await state.clear()
     await admin_panel_start(message, state)
 
-# --------------------
-# Valyuta kursini oâzgartirish
-# --------------------
+# Edit rate
 @router.message(AdminFSM.edit_rate_choose)
 async def edit_currency_rate_choose(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
@@ -641,30 +666,33 @@ async def edit_currency_rate_choose(message: types.Message, state: FSMContext):
 
 @router.message(AdminFSM.edit_rate_set)
 async def edit_currency_rate_set(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
     try:
         rate = float(message.text.replace(",", "."))
-    except:
+    except Exception:
         await message.answer("Iltimos raqam kiriting.")
         return
     data = await state.get_data()
-    # here we set both buy and sell to same value (same as original code)
-    currencies[data["rate_name"]]["buy_rate"] = rate
-    currencies[data["rate_name"]]["sell_rate"] = rate
+    name = data.get("rate_name")
+    if not name or name not in currencies:
+        await message.answer("Valyuta topilmadi.")
+        await state.clear()
+        await admin_panel_start(message, state)
+        return
+    currencies[name]["buy_rate"] = rate
+    currencies[name]["sell_rate"] = rate
     save_json(CURRENCIES_FILE, currencies)
-    await message.answer(f"{data['rate_name']} kursi yangilandi: {rate}", reply_markup=back_kb())
+    await message.answer(f"{name} kursi yangilandi: {rate}", reply_markup=back_kb())
     await state.clear()
     await admin_panel_start(message, state)
 
-# --------------------
-# Valyuta karta raqamini oâzgartirish (Buy/Sell)
-# --------------------
+# Edit card
 @router.message(AdminFSM.edit_card_choose)
 async def edit_currency_card_choose(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
@@ -677,7 +705,7 @@ async def edit_currency_card_choose(message: types.Message, state: FSMContext):
 
 @router.message(AdminFSM.edit_card_set)
 async def edit_currency_card_set(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
@@ -688,50 +716,53 @@ async def edit_currency_card_set(message: types.Message, state: FSMContext):
         await message.answer("Sotish (Sell) karta raqamini kiriting:", reply_markup=back_kb())
         return
 
-    currencies[data["card_name"]]["buy_card"] = data["buy_card_new"]
-    currencies[data["card_name"]]["sell_card"] = message.text
+    name = data.get("card_name")
+    if not name or name not in currencies:
+        await message.answer("Valyuta topilmadi.")
+        await state.clear()
+        await admin_panel_start(message, state)
+        return
+
+    currencies[name]["buy_card"] = data.get("buy_card_new")
+    currencies[name]["sell_card"] = message.text
     save_json(CURRENCIES_FILE, currencies)
-    await message.answer(f"{data['card_name']} karta raqamlari yangilandi.\nBuy: {data['buy_card_new']}, Sell: {message.text}", reply_markup=back_kb())
+    await message.answer(f"{name} karta raqamlari yangilandi.\nBuy: {data.get('buy_card_new')}, Sell: {message.text}", reply_markup=back_kb())
     await state.clear()
     await admin_panel_start(message, state)
 
-# --------------------
-# Valyuta oâchirish
-# --------------------
+# Delete currency
 @router.message(AdminFSM.delete_choose)
 async def delete_currency(message: types.Message, state: FSMContext):
-    if message.text == "â¹ï¸ Bekor qilish":
+    if message.text == "↩️ Bekor qilish":
         await state.clear()
         await admin_panel_start(message, state)
         return
     if message.text not in currencies:
         await message.answer("Valyuta topilmadi.")
         return
-    removed = currencies.pop(message.text)
+    currencies.pop(message.text, None)
     save_json(CURRENCIES_FILE, currencies)
-    await message.answer(f"{message.text} oâchirildi.", reply_markup=back_kb())
+    await message.answer(f"{message.text} o'chirildi.", reply_markup=back_kb())
     await state.clear()
     await admin_panel_start(message, state)
 
-# --------------------
-# Fallback: any text not handled - show main menu
-# --------------------
+# Fallback - show main menu
 @router.message()
 async def fallback(message: types.Message):
-    # basic fallback to show main menu (prevents silent failures)
     await message.answer("Quyidagi tugmalardan tanlang:", reply_markup=main_menu_kb(message.from_user.id))
 
 # --------------------
 # Main (start polling)
 # --------------------
 async def main():
-    bot = Bot(token=API_TOKEN)
+    bot = Bot(token=API_TOKEN, parse_mode="HTML")
     dp = Dispatcher(storage=storage)
     dp.include_router(router)
-    print("Bot ishga tushmoqda...")
+    logger.info("Bot ishga tushmoqda...")
     try:
         await dp.start_polling(bot)
     finally:
         await bot.session.close()
+
 if __name__ == "__main__":
     asyncio.run(main())
