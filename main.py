@@ -19,3 +19,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+from telegram import ReplyKeyboardMarkup
+
+async def start(update: Update, context):
+    keyboard = [
+        ["💰 Sotib olish", "💸 Sotish"],
+        ["⚙️ Admin panel"]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(
+        "Salom! Quyidagilardan birini tanlang:",
+        reply_markup=reply_markup
+    )
