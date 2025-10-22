@@ -730,3 +730,10 @@ async def main():
     finally:
         await bot.session.close()
         logger.info("Bot seansi yopildi.")
+
+# <-- **MUHIM**: quyidagi qatorlar fayl oxirida bo‘lishi kerak
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Bot to‘xtatildi.")
