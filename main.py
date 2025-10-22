@@ -1,4 +1,3 @@
-# obmen_bot_full.py
 # -*- coding: utf-8 -*-
 import os, json, time, logging
 from aiogram import Bot, Dispatcher, executor, types
@@ -7,16 +6,19 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 
 # --------------------
-# Sozlamalar
+# Sozlamalar (Railway ENV variables)
 # --------------------
 os.environ["TZ"] = "Asia/Tashkent"
-API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
-ADMIN_ID = 7973934849
+API_TOKEN = os.getenv("API_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 DATA_DIR = "bot_data"
 CURRENCIES_FILE = os.path.join(DATA_DIR, "currencies.json")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
 os.makedirs(DATA_DIR, exist_ok=True)
+
+if not API_TOKEN:
+    raise Exception("❌ API_TOKEN o'rnatilmagan. Railway 'Variables' bo'limida qo‘shing.")
 
 # --------------------
 # Logging & bot init
@@ -32,18 +34,18 @@ dp = Dispatcher(bot, storage=storage)
 # --------------------
 def load_json(path, default):
     if not os.path.exists(path):
-        with open(path,"w",encoding="utf-8") as f:
-            json.dump(default,f,ensure_ascii=False,indent=2)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(default, f, ensure_ascii=False, indent=2)
         return default
-    with open(path,"r",encoding="utf-8") as f:
-        try: 
+    with open(path, "r", encoding="utf-8") as f:
+        try:
             return json.load(f)
-        except: 
+        except:
             return default
 
 def save_json(path, data):
-    with open(path,"w",encoding="utf-8") as f:
-        json.dump(data,f,ensure_ascii=False,indent=2)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 # --------------------
 # Data stores
@@ -51,7 +53,6 @@ def save_json(path, data):
 currencies = load_json(CURRENCIES_FILE, {})
 users = load_json(USERS_FILE, {})
 orders = load_json(ORDERS_FILE, {})
-sessions = {}
 
 # --------------------
 # FSM
@@ -83,49 +84,54 @@ class AdminFSM(StatesGroup):
     edit_card_set = State()
     delete_choose = State()
 
+class BroadcastFSM(StatesGroup):
+    waiting_message = State()
+
 # --------------------
 # Utilities
 # --------------------
 def is_admin(uid):
-    return int(uid)==int(ADMIN_ID)
+    return int(uid) == int(ADMIN_ID)
 
-def ensure_user(uid,tg_user=None):
+def ensure_user(uid, tg_user=None):
     key = str(uid)
     if key not in users:
-        users[key]={"id":uid,"name":tg_user.full_name if tg_user else "",
-                    "username":tg_user.username if tg_user else "",
-                    "orders":[]}
-        save_json(USERS_FILE,users)
+        users[key] = {
+            "id": uid,
+            "name": tg_user.full_name if tg_user else "",
+            "username": tg_user.username if tg_user else "",
+            "orders": []
+        }
+        save_json(USERS_FILE, users)
     return users[key]
 
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(
-        types.KeyboardButton("💲 Sotib olish"),
-        types.KeyboardButton("💰 Sotish")
-    )
+    kb.row(types.KeyboardButton("💲 Sotib olish"), types.KeyboardButton("💰 Sotish"))
     if uid and is_admin(uid):
         kb.add(types.KeyboardButton("⚙️ Admin Panel"))
     return kb
 
 def back_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True,one_time_keyboard=True)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
     return kb
 
 def new_order_id():
-    return str(int(time.time()*1000))
+    return str(int(time.time() * 1000))
 
 # --------------------
 # Start
 # --------------------
 @dp.message_handler(commands=['start'])
 async def cmd_start(message: types.Message):
-    uid = message.from_user.id
-    user = ensure_user(uid, message.from_user)
-    await message.answer(f"Assalomu alaykum, {user['name']}! 👋\nXush kelibsiz botimizga. Pastdagi tugma orqali curupto valuta sotib olishingiz va sotishingiz mumkin.", 
-                         reply_markup=main_menu_kb(uid))
-
+    user = ensure_user(message.from_user.id, message.from_user)
+    await message.answer(
+        f"Assalomu alaykum, {user['name']}! 👋\n"
+        f"Xush kelibsiz botimizga.\nValyuta sotib olish yoki sotish uchun pastdagi tugmalardan foydalaning.",
+        reply_markup=main_menu_kb(message.from_user.id)
+    )
+        
 # --------------------
 # Sotib olish
 # --------------------
