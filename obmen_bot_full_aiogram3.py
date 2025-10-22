@@ -13,7 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 # -------------------------
 os.environ.setdefault("TZ", "Asia/Tashkent")
 
-API_TOKEN = os.getenv("API_TOKEN","7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
+API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
 ADMIN_ID_ENV = 7973934849
 
 if not API_TOKEN:
