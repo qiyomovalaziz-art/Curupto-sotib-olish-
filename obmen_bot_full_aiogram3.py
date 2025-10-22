@@ -728,4 +728,4 @@ async def main():
     try:
         await dp.start_polling(bot)
     finally:
-    await message.answer("Xatolik sodir bo‘ldi, lekin jarayon to‘xtamadi.")
+    pass
