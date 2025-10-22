@@ -21,7 +21,7 @@ from aiogram.fsm.context import FSMContext
 # --------------------
 # Sozlamalar
 # --------------------
-API_TOKEN = "YOUR_BOT_TOKEN_HERE"  # <-- Shu yerga haqiqiy tokenni qo'ying
+API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"  # <-- Shu yerga haqiqiy tokenni qo'ying
 # ADMIN_ID ni o'zgartirish mumkin yoki muhitdan oling:
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7973934849"))
 
