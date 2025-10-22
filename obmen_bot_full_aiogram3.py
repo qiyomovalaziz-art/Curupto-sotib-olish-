@@ -728,4 +728,5 @@ async def main():
     try:
         await dp.start_polling(bot)
     finally:
-    pass
+        await bot.session.close()
+        logger.info("Bot seansi yopildi.")
