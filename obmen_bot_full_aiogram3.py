@@ -132,10 +132,15 @@ def new_order_id() -> str:
 # Keyboard helper (aiogram 3 talabiga mos)
 def make_keyboard(rows):
     """rows: list of lists of button texts, e.g. [['A','B'], ['C']]"""
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text) for text in row] for row in rows],
-        resize_keyboard=True
-    )
+    if not rows or not isinstance(rows, list):
+        rows = [["⬅️ Orqaga"]]
+    safe_rows = []
+    for row in rows:
+        if isinstance(row, list):
+            safe_rows.append([KeyboardButton(text=str(b)) for b in row])
+        else:
+            safe_rows.append([KeyboardButton(text=str(row))])
+    return ReplyKeyboardMarkup(keyboard=safe_rows, resize_keyboard=True)
 
 def main_menu_kb(uid=None):
     rows = [["💲 Sotib olish", "💰 Sotish"]]
