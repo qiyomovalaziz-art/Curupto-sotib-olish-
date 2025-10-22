@@ -9,8 +9,8 @@ from aiogram.dispatcher import FSMContext
 # Sozlamalar (Railway ENV variables)
 # --------------------
 os.environ["TZ"] = "Asia/Tashkent"
-API_TOKEN = os.getenv("API_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+API_TOKEN = 7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ
+ADMIN_ID = 7973934849
 DATA_DIR = "bot_data"
 CURRENCIES_FILE = os.path.join(DATA_DIR, "currencies.json")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
