@@ -34,8 +34,8 @@ from aiogram.fsm.context import FSMContext
 # --------------------
 os.environ.setdefault("TZ", "Asia/Tashkent")
 
-API_TOKEN = os.getenv("7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ")  # required!
-ADMIN_ID_ENV = os.getenv("7973934849")  # optional but recommended (just number)
+API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ" # required!
+ADMIN_ID_ENV = 7973934849  # optional but recommended (just number)
 
 if not API_TOKEN:
     raise RuntimeError("API_TOKEN topilmadi! Railway Variables yoki .env ga API_TOKEN qo'ying.")
