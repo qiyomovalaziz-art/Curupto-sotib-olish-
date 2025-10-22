@@ -268,20 +268,31 @@ async def buy_confirm_file(message: types.Message, state: FSMContext, bot: Bot):
         "status": "waiting_admin",
         "created_at": int(time.time()),
         "rate": currencies.get(data["currency"], {}).get("buy_rate")
-    }
-    orders[order_id] = order
-    users.setdefault(str(message.from_user.id), {"id": message.from_user.id, "orders": []}).setdefault("orders", []).append(order_id)
-    save_json(ORDERS_FILE, orders)
-    save_json(USERS_FILE, users)
+    @router.message(BuyFSM.confirm, lambda m: m.content_type in ['photo', 'document'])
+async def buy_check(message: Message, state: FSMContext):
+    data = await state.get_data()
+    if message.photo:
+        file_id = message.photo[-1].file_id
+    elif message.document:
+        file_id = message.document.file_id
+    else:
+        await message.answer("Iltimos, chekni rasm yoki fayl sifatida yuboring (photo yoki document).")
+        return
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"),
-             InlineKeyboardButton("❌ Bekor qilish", callback_data=f"admin_order|reject|{order_id}")]
-        ]
+    # Chekni yuborish admin kanaliga
+    await bot.send_message(
+        ADMIN_CHAT_ID,
+        f"🧾 Yangi chek keldi!\n\nFoydalanuvchi: @{message.from_user.username}\nSummasi: {data.get('amount')}\nPul birligi: {data.get('currency')}\nTo‘lov turi: {data.get('method')}"
     )
+    if message.photo:
+        await bot.send_photo(ADMIN_CHAT_ID, file_id)
+    else:
+        await bot.send_document(ADMIN_CHAT_ID, file_id)
 
-    order_text = (
+    await message.answer("✅ Chekingiz yuborildi! Tasdiqlash jarayoni davom etmoqda.")
+    await state.clear()
+
+    
         f"Yangi buyurtma!\n"
         f"Foydalanuvchi: {message.from_user.full_name}\n"
         f"ID: {message.from_user.id}\n"
