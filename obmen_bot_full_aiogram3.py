@@ -1,38 +1,29 @@
-# obmen_bot_full_aiogram3.py
-# -*- coding: utf-8 -*-
-import os
-import json
-import time
-import logging
 import asyncio
-
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import (
-    ReplyKeyboardMarkup, KeyboardButton,
-    InlineKeyboardMarkup, InlineKeyboardButton
-)
+import os
+from aiogram import Bot, Dispatcher, Router, F
+from aiogram.types import Message
+from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command
-from aiogram import Router
-
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.memory import MemoryStorage
 
-# --------------------
-# Configuration (from environment)
-# --------------------
+# -------------------------
+# Config (environmentdan)
+# -------------------------
 os.environ.setdefault("TZ", "Asia/Tashkent")
 
-API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
+API_TOKEN = os.getenv("API_TOKEN","7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
 ADMIN_ID_ENV = 7973934849
 
 if not API_TOKEN:
-    raise RuntimeError("API_TOKEN muhim! Iltimos TELEGRAM token-ni ENV ga qo'ying (API_TOKEN).")
+    raise RuntimeError("API_TOKEN muhim! Railway Variables ichida qo‘shing.")
 
 try:
     ADMIN_ID = int(ADMIN_ID_ENV) if ADMIN_ID_ENV else None
 except:
     ADMIN_ID = None
+
 
 # local data files
 DATA_DIR = "bot_data"
