@@ -121,13 +121,17 @@ def ensure_user(uid, tg_user=None):
         }
         save_json(USERS_FILE, users)
     return users[key]
-
 def main_menu_kb(uid=None):
-    kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(KeyboardButton("💲 Sotib olish"), KeyboardButton("💰 Sotish"))
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="💲 Sotib olish"), KeyboardButton(text="💰 Sotish")]
+        ],
+        resize_keyboard=True
+    )
     if uid and is_admin(uid):
-        kb.add(KeyboardButton("⚙️ Admin Panel"))
+        kb.keyboard.append([KeyboardButton(text="⚙️ Admin Panel")])
     return kb
+
 
 def back_kb():
     kb = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
