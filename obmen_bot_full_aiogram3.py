@@ -22,7 +22,7 @@ from aiogram.fsm.context import FSMContext
 # Sozlamalar (ENV orqali)
 # --------------------
 # Railway yoki lokalda: BOT_TOKEN ni Environment Variables ga qo'ying
-API_TOKEN = “7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ”
+API_TOKEN = "7644659937:AAHnvt01ZKVtjQAb649QKQheWXPQQJVsitQ"
 # Agar ADMIN_ID ENV da bo'lsa, o'shani ishlatamiz, aks holda 7973934849 (istalgan raqam) ishlatiladi
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7973934849"))
 
