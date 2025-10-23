@@ -2,70 +2,118 @@
 import logging
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.dispatcher import FSMContext
+from aiogram.utils.exceptions import ChatNotFound, BotBlocked
 
-# === Sozlamalar ===
-API_TOKEN = "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc"  # Tokenni bu yerga yoz
-ADMIN_ID = 7973934849  # Azizbekning admin ID
+# 🔧 Sozlamalar
+BOT_TOKEN = "BOT_TOKEN"  # <-- bu yerga tokeningni joylashtirasan
+ADMIN_ID = 7973934849
 
-# === Log va botni ishga tushirish ===
+# Majburiy obuna kanallari
+CHANNELS = ["@Qiyomov_Azizbek", "@tlovchek"]
+
+# 🔧 Log va botni sozlash
 logging.basicConfig(level=logging.INFO)
-bot = Bot(token=API_TOKEN)
-storage = MemoryStorage()
-dp = Dispatcher(bot, storage=storage)
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher(bot, storage=MemoryStorage())
 
-# === FSM: Adminga xabar yuborish uchun holat ===
-class ContactAdminFSM(StatesGroup):
+# 💬 Adminga xabar yuborish uchun holat
+class ContactAdmin(StatesGroup):
     waiting_message = State()
 
-# === Asosiy menyu tugmalari ===
-def main_keyboard():
-    buttons = [
-        ["🪙 Sotib olish", "💵 Sotish"],
-        ["📩 Adminga xabar yuborish"]
-    ]
-    return types.ReplyKeyboardMarkup(resize_keyboard=True).add(*[types.KeyboardButton(b) for row in buttons for b in row])
+# 🔍 Majburiy obunani tekshirish
+async def check_subscription(user_id):
+    for channel in CHANNELS:
+        try:
+            member = await bot.get_chat_member(channel, user_id)
+            if member.status not in ["member", "administrator", "creator"]:
+                return False
+        except Exception:
+            return False
+    return True
 
-# === /start buyrug‘i ===
+# 📲 Asosiy menyu
+def main_menu():
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add("💵 Sotib olish", "💰 Sotish")
+    keyboard.add("📦 Buyurtmani holatini ko‘rish")
+    keyboard.add("✉️ Adminga xabar yuborish")
+    keyboard.add("📢 Bizning kanallar", "📸 Instagram")
+    return keyboard
+
+# 🚀 /start buyrug‘i
 @dp.message_handler(commands=['start'])
 async def start_command(message: types.Message):
+    if not await check_subscription(message.from_user.id):
+        text = "📢 Iltimos, quyidagi kanallarga obuna bo‘ling va /start ni qayta yuboring:\n\n"
+        for ch in CHANNELS:
+            text += f"➡️ {ch}\n"
+        text += "\n✅ Obuna bo‘lgach, /start ni qayta yuboring."
+        await message.answer(text)
+        return
+
     await message.answer(
-        "Salom! Bu bot orqali siz valyuta almashishingiz yoki adminga xabar yuborishingiz mumkin👇",
-        reply_markup=main_keyboard()
+        "👋 Salom! Xush kelibsiz!\nQuyidagi menyudan kerakli bo‘limni tanlang 👇",
+        reply_markup=main_menu()
     )
 
-# === Sotish va sotib olish ===
-@dp.message_handler(lambda message: message.text == "🪙 Sotib olish")
-async def buy_currency(message: types.Message):
-    await message.answer("Sotib olish uchun valyutani tanlang yoki operator bilan bog‘laning.")
+# 💵 Sotib olish
+@dp.message_handler(lambda message: message.text == "💵 Sotib olish")
+async def buy_section(message: types.Message):
+    await message.answer("💵 Sotib olish uchun admin bilan bog‘laning: @Qiyomov_Azizbek")
 
-@dp.message_handler(lambda message: message.text == "💵 Sotish")
-async def sell_currency(message: types.Message):
-    await message.answer("Sotish uchun valyutani tanlang yoki operator bilan bog‘laning.")
+# 💰 Sotish
+@dp.message_handler(lambda message: message.text == "💰 Sotish")
+async def sell_section(message: types.Message):
+    await message.answer("💰 Sotish uchun admin bilan bog‘laning: @Qiyomov_Azizbek")
 
-# === Adminga xabar yuborish ===
-@dp.message_handler(lambda message: message.text == "📩 Adminga xabar yuborish")
+# 📦 Buyurtmani holatini ko‘rish
+@dp.message_handler(lambda message: message.text == "📦 Buyurtmani holatini ko‘rish")
+async def check_order(message: types.Message):
+    await message.answer("📦 Buyurtma holatini ko‘rish uchun buyurtma raqamingizni kiriting:")
+    # Bu yerda kelajakda bazadan yoki fayldan ma’lumot olish funksiyasi qo‘shilishi mumkin
+
+# ✉️ Adminga xabar yuborish
+@dp.message_handler(lambda message: message.text == "✉️ Adminga xabar yuborish")
 async def contact_admin(message: types.Message):
-    await message.answer("Adminga yubormoqchi bo‘lgan xabaringizni kiriting:")
-    await ContactAdminFSM.waiting_message.set()
+    await message.answer("✉️ Adminga yubormoqchi bo‘lgan xabaringizni kiriting:")
+    await ContactAdmin.waiting_message.set()
 
-# === Foydalanuvchi xabar yuborganda ===
-@dp.message_handler(state=ContactAdminFSM.waiting_message)
-async def send_to_admin(message: types.Message, state: FSMContext):
-    text = f"📩 <b>Yangi xabar!</b>\n\n👤 Foydalanuvchi: @{message.from_user.username or message.from_user.full_name}\n🆔 ID: {message.from_user.id}\n\n💬 Xabar:\n{message.text}"
-    await bot.send_message(ADMIN_ID, text, parse_mode="HTML")
-    await message.answer("✅ Xabaringiz adminga yuborildi!", reply_markup=main_keyboard())
+@dp.message_handler(state=ContactAdmin.waiting_message, content_types=types.ContentTypes.TEXT)
+async def send_message_to_admin(message: types.Message, state: FSMContext):
+    user = message.from_user
+    text = (
+        f"📩 <b>Foydalanuvchidan yangi xabar</b>\n\n"
+        f"👤 Ismi: {user.full_name}\n"
+        f"🆔 ID: <code>{user.id}</code>\n"
+        f"🔗 Username: @{user.username}\n\n"
+        f"💬 Xabar:\n{message.text}"
+    )
+    try:
+        await bot.send_message(ADMIN_ID, text, parse_mode="HTML")
+        await message.answer("✅ Xabaringiz adminga yuborildi!", reply_markup=main_menu())
+    except BotBlocked:
+        await message.answer("❌ Admin bilan bog‘lanib bo‘lmadi (bot bloklangan).")
     await state.finish()
 
-# === Xatoliklar uchun fallback ===
+# 📢 Bizning kanallar
+@dp.message_handler(lambda message: message.text == "📢 Bizning kanallar")
+async def channels_list(message: types.Message):
+    text = "📢 Bizning rasmiy kanallar:\n\n"
+    for ch in CHANNELS:
+        text += f"➡️ {ch}\n"
+    await message.answer(text)
+
+# 📸 Instagram
+@dp.message_handler(lambda message: message.text == "📸 Instagram")
+async def instagram_link(message: types.Message):
+    await message.answer("📸 Bizni Instagram’da kuzating:\n👉 [@azizku__2008](https://www.instagram.com/azizku__2008)", parse_mode="Markdown")
+
+# ⚠️ Agar noto‘g‘ri narsa yozilsa
 @dp.message_handler()
 async def fallback(message: types.Message):
-    await message.answer("Iltimos, menyudagi tugmalardan birini tanlang.", reply_markup=main_keyboard())
-
-# === Botni ishga tushirish ===
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+    await message.answer("❗ Iltimos, menyudagi tugmalardan birini tanlang.", reply_markup=main_menu())
 
 # --------------------
 # 💲 Sotib olish funksiyasi
