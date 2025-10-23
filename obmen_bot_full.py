@@ -7,7 +7,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.utils.exceptions import ChatNotFound, BotBlocked
 
 # 🔧 Sozlamalar
-BOT_TOKEN = "BOT_TOKEN"  # <-- bu yerga tokeningni joylashtirasan
+BOT_TOKEN = "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc"  # <-- bu yerga tokeningni joylashtirasan
 ADMIN_ID = 7973934849
 
 # Majburiy obuna kanallari
