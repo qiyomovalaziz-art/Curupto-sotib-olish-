@@ -8,15 +8,15 @@ from aiogram.dispatcher import FSMContext
 # --------------------
 # Sozlamalar
 # --------------------
-API_TOKEN = "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc"
-ADMIN_ID = 7973934849  # O'zingning Telegram ID'ingni yoz
+API_TOKEN = "BOT_TOKENINGNI_BU_YERGA_QOY"  # Tokenni bu yerga yoz
+ADMIN_ID = 7973934849  # Azizbekning Telegram ID'si
 DATA_DIR = "bot_data"
 os.makedirs(DATA_DIR, exist_ok=True)
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
 
 # --------------------
-# Boshlang'ich sozlamalar
+# Boshlang‘ich sozlamalar
 # --------------------
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
@@ -46,8 +46,16 @@ orders = load_json(ORDERS_FILE, {})
 # --------------------
 # FSM holatlar
 # --------------------
-class AdminFSM(StatesGroup):
-    main = State()
+class BuyFSM(StatesGroup):
+    amount = State()
+    wallet = State()
+
+class SellFSM(StatesGroup):
+    amount = State()
+    wallet = State()
+
+class ContactAdminFSM(StatesGroup):
+    waiting_message = State()
 
 # --------------------
 # Tugmalar
@@ -55,7 +63,7 @@ class AdminFSM(StatesGroup):
 def main_menu(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row("💲 Sotib olish", "💰 Sotish")
-    kb.add("📩 Adminga xabar")
+    kb.add("📨 Adminga xabar yuborish")
     if uid == ADMIN_ID:
         kb.add("⚙️ Admin panel")
     return kb
@@ -92,9 +100,9 @@ async def start_cmd(msg: types.Message):
     )
 
 # --------------------
-# 📩 Adminga xabar funksiyasi
+# 📨 Adminga xabar yuborish funksiyasi
 # --------------------
-@dp.message_handler(lambda m: m.text == "📩 Adminga xabar")
+@dp.message_handler(lambda m: m.text == "📨 Adminga xabar yuborish")
 async def contact_admin(msg: types.Message):
     await msg.answer("✉️ Adminga yuboriladigan xabaringizni kiriting:", reply_markup=cancel_kb())
     await ContactAdminFSM.waiting_message.set()
