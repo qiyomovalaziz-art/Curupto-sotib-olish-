@@ -171,7 +171,8 @@ from aiogram.dispatcher import FSMContext
 async def cmd_start(message: types.Message):
     ensure_user(message.from_user.id, message.from_user)
     await message.answer(
-        "Assalomu alaykum! 👋\nBu bot orqali valuta sotib olishingiz va sotishingiz mumkin.\nPastdagi menyudan tanlang.",
+        f"Assalomu alaykum, {message.from_user.first_name}! 👋\n"
+        "Bu bot orqali valuta sotib olishingiz va sotishingiz mumkin.",
         reply_markup=main_menu_kb(message.from_user.id)
     )
 
