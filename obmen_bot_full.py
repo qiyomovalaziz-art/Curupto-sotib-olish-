@@ -10,7 +10,7 @@ from aiogram.dispatcher import FSMContext
 # Sozlamalar
 # --------------------
 os.environ["TZ"] = "Asia/Tashkent"
-API_TOKEN = "YOUR_BOT_TOKEN"
+API_TOKEN = "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc"
 ADMIN_ID = 7973934849
 DATA_DIR = "bot_data"
 CURRENCIES_FILE = os.path.join(DATA_DIR, "currencies.json")
