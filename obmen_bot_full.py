@@ -1,127 +1,71 @@
 # -*- coding: utf-8 -*-
-import os, json, time, logging
+import logging
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
-# --------------------
-# Sozlamalar
-# --------------------
+# === Sozlamalar ===
 API_TOKEN = "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc"  # Tokenni bu yerga yoz
-ADMIN_ID = 7973934849  # Azizbekning Telegram ID'si
-DATA_DIR = "bot_data"
-os.makedirs(DATA_DIR, exist_ok=True)
-USERS_FILE = os.path.join(DATA_DIR, "users.json")
-ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
+ADMIN_ID = 7973934849  # Azizbekning admin ID
 
-# --------------------
-# Boshlang‘ich sozlamalar
-# --------------------
+# === Log va botni ishga tushirish ===
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot, storage=MemoryStorage())
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
 
-# --------------------
-# JSON funksiyalar
-# --------------------
-def load_json(file, default):
-    if not os.path.exists(file):
-        with open(file, "w", encoding="utf-8") as f:
-            json.dump(default, f, ensure_ascii=False, indent=2)
-        return default
-    with open(file, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except:
-            return default
-
-def save_json(file, data):
-    with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-users = load_json(USERS_FILE, {})
-orders = load_json(ORDERS_FILE, {})
-
-# --------------------
-# FSM holatlar
-# --------------------
-class BuyFSM(StatesGroup):
-    amount = State()
-    wallet = State()
-
-class SellFSM(StatesGroup):
-    amount = State()
-    wallet = State()
-
+# === FSM: Adminga xabar yuborish uchun holat ===
 class ContactAdminFSM(StatesGroup):
     waiting_message = State()
 
-# --------------------
-# Tugmalar
-# --------------------
-def main_menu(uid=None):
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("💲 Sotib olish", "💰 Sotish")
-    kb.add("📨 Adminga xabar yuborish")
-    if uid == ADMIN_ID:
-        kb.add("⚙️ Admin panel")
-    return kb
+# === Asosiy menyu tugmalari ===
+def main_keyboard():
+    buttons = [
+        ["🪙 Sotib olish", "💵 Sotish"],
+        ["📩 Adminga xabar yuborish"]
+    ]
+    return types.ReplyKeyboardMarkup(resize_keyboard=True).add(*[types.KeyboardButton(b) for row in buttons for b in row])
 
-def cancel_kb():
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.add("⏹️ Bekor qilish")
-    return kb
-
-# --------------------
-# Foydalanuvchi funksiyasi
-# --------------------
-def ensure_user(user):
-    uid = str(user.id)
-    if uid not in users:
-        users[uid] = {
-            "id": user.id,
-            "name": user.full_name,
-            "username": user.username,
-            "orders": []
-        }
-        save_json(USERS_FILE, users)
-    return users[uid]
-
-# --------------------
-# Start komandasi
-# --------------------
+# === /start buyrug‘i ===
 @dp.message_handler(commands=['start'])
-async def start_cmd(msg: types.Message):
-    user = ensure_user(msg.from_user)
-    await msg.answer(
-        f"👋 Salom {user['name']}!\nBotga xush kelibsiz.\nQuyidagilardan birini tanlang:",
-        reply_markup=main_menu(msg.from_user.id)
+async def start_command(message: types.Message):
+    await message.answer(
+        "Salom! Bu bot orqali siz valyuta almashishingiz yoki adminga xabar yuborishingiz mumkin👇",
+        reply_markup=main_keyboard()
     )
 
-# --------------------
-# 📨 Adminga xabar yuborish funksiyasi
-# --------------------
-@dp.message_handler(lambda m: m.text == "📨 Adminga xabar yuborish")
-async def contact_admin(msg: types.Message):
-    await msg.answer("✉️ Adminga yuboriladigan xabaringizni kiriting:", reply_markup=cancel_kb())
+# === Sotish va sotib olish ===
+@dp.message_handler(lambda message: message.text == "🪙 Sotib olish")
+async def buy_currency(message: types.Message):
+    await message.answer("Sotib olish uchun valyutani tanlang yoki operator bilan bog‘laning.")
+
+@dp.message_handler(lambda message: message.text == "💵 Sotish")
+async def sell_currency(message: types.Message):
+    await message.answer("Sotish uchun valyutani tanlang yoki operator bilan bog‘laning.")
+
+# === Adminga xabar yuborish ===
+@dp.message_handler(lambda message: message.text == "📩 Adminga xabar yuborish")
+async def contact_admin(message: types.Message):
+    await message.answer("Adminga yubormoqchi bo‘lgan xabaringizni kiriting:")
     await ContactAdminFSM.waiting_message.set()
 
+# === Foydalanuvchi xabar yuborganda ===
 @dp.message_handler(state=ContactAdminFSM.waiting_message)
-async def send_to_admin(msg: types.Message, state: FSMContext):
-    if msg.text == "⏹️ Bekor qilish":
-        await state.finish()
-        await msg.answer("❌ Bekor qilindi.", reply_markup=main_menu(msg.from_user.id))
-        return
-    text = (
-        f"📩 <b>Yangi xabar</b>\n\n"
-        f"👤 Ism: {msg.from_user.full_name}\n"
-        f"🆔 ID: <code>{msg.from_user.id}</code>\n"
-        f"💬 Xabar:\n{msg.text}"
-    )
+async def send_to_admin(message: types.Message, state: FSMContext):
+    text = f"📩 <b>Yangi xabar!</b>\n\n👤 Foydalanuvchi: @{message.from_user.username or message.from_user.full_name}\n🆔 ID: {message.from_user.id}\n\n💬 Xabar:\n{message.text}"
     await bot.send_message(ADMIN_ID, text, parse_mode="HTML")
-    await msg.answer("✅ Xabaringiz adminga yuborildi!", reply_markup=main_menu(msg.from_user.id))
+    await message.answer("✅ Xabaringiz adminga yuborildi!", reply_markup=main_keyboard())
     await state.finish()
+
+# === Xatoliklar uchun fallback ===
+@dp.message_handler()
+async def fallback(message: types.Message):
+    await message.answer("Iltimos, menyudagi tugmalardan birini tanlang.", reply_markup=main_keyboard())
+
+# === Botni ishga tushirish ===
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
 
 # --------------------
 # 💲 Sotib olish funksiyasi
