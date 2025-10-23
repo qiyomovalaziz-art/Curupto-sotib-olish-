@@ -46,16 +46,8 @@ orders = load_json(ORDERS_FILE, {})
 # --------------------
 # FSM holatlar
 # --------------------
-class BuyFSM(StatesGroup):
-    amount = State()
-    wallet = State()
-
-class SellFSM(StatesGroup):
-    amount = State()
-    wallet = State()
-
-class ContactAdminFSM(StatesGroup):
-    waiting_message = State()
+class AdminFSM(StatesGroup):
+    main = State()
 
 # --------------------
 # Tugmalar
