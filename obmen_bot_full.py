@@ -8,7 +8,7 @@ from aiogram.dispatcher import FSMContext
 # --------------------
 # Sozlamalar
 # --------------------
-API_TOKEN = "BOT_TOKENINGNI_BU_YERGA_QOY"  # Tokenni bu yerga yoz
+API_TOKEN = "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc"  # Tokenni bu yerga yoz
 ADMIN_ID = 7973934849  # Azizbekning Telegram ID'si
 DATA_DIR = "bot_data"
 os.makedirs(DATA_DIR, exist_ok=True)
