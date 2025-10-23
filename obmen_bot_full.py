@@ -1,4 +1,3 @@
-# obmen_bot_full.py
 # -*- coding: utf-8 -*-
 import os, json, time, logging
 from aiogram import Bot, Dispatcher, executor, types
@@ -67,22 +66,7 @@ class SellFSM(StatesGroup):
     wallet = State()
     wait_check = State()
 
-class AdminFSM(StatesGroup):
-    main = State()
-    add_name = State()
-    add_buy_rate = State()
-    add_sell_rate = State()
-    add_buy_card = State()
-    add_sell_card = State()
-    edit_choose = State()
-    edit_name = State()
-    edit_rate_choose = State()
-    edit_rate_set = State()
-    edit_card_choose = State()
-    edit_card_set = State()
-    delete_choose = State()
-
-class BroadcastFSM(StatesGroup):
+class ContactAdminFSM(StatesGroup):
     waiting_message = State()
 
 # --------------------
@@ -103,6 +87,7 @@ def ensure_user(uid,tg_user=None):
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row("💲 Sotib olish", "💰 Sotish")
+    kb.add("📩 Adminga xabar")  # yangi tugma
     if uid and is_admin(uid):
         kb.add("⚙️ Admin Panel")
     return kb
@@ -124,9 +109,35 @@ async def cmd_start(message: types.Message):
     user = ensure_user(uid, message.from_user)
     await message.answer(
         f"Assalomu alaykum, {user['name']}! 👋\n"
-        "Xush kelibsiz botimizga. Quyidagi tugmalar orqali valuta sotib olishingiz yoki sotishingiz mumkin.",
+        "Xush kelibsiz botimizga.\nQuyidagi tugmalar orqali valuta sotib olishingiz, sotishingiz yoki adminga xabar yuborishingiz mumkin.",
         reply_markup=main_menu_kb(uid)
     )
+
+# --------------------
+# 📩 Adminga xabar funksiyasi
+# --------------------
+@dp.message_handler(lambda message: message.text == "📩 Adminga xabar")
+async def contact_admin_start(message: types.Message):
+    await message.answer("✉️ Xabaringizni kiriting:", reply_markup=back_kb())
+    await ContactAdminFSM.waiting_message.set()
+
+@dp.message_handler(state=ContactAdminFSM.waiting_message)
+async def contact_admin_send(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    
+    # Xabarni adminga yuborish
+    text = (
+        f"📩 *Foydalanuvchidan yangi xabar*\n\n"
+        f"👤 Ism: {message.from_user.full_name}\n"
+        f"🆔 ID: {message.from_user.id}\n"
+        f"💬 Xabar:\n{message.text}"
+    )
+    await bot.send_message(ADMIN_ID, text, parse_mode="Markdown")
+    await message.answer("✅ Xabaringiz adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await state.finish()
 
 # --------------------
 # Sotib olish
