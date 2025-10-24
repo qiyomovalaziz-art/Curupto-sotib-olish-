@@ -12,22 +12,20 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 
 # --------------------
-# Sozlamalar (o'zgartiring: token va admin id ni o'zingizniki bilan almashtiring)
+# Sozlamalar
 # --------------------
 os.environ["TZ"] = "Asia/Tashkent"
 API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc")
 ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "7973934849"))
 
-# Foydali direktoriyalar/fayllar
 DATA_DIR = "bot_data"
 CURRENCIES_FILE = os.path.join(DATA_DIR, "currencies.json")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
-
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # --------------------
-# Logging & bot init
+# Logging va bot init
 # --------------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -37,53 +35,46 @@ bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot, storage=storage)
 
 # --------------------
-# JSON faylga yozish/o'qish yordamchilari
+# JSON yordamchilari
 # --------------------
 def load_json(path: str, default: Any):
     if not os.path.exists(path):
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(default, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.exception("Fayl yaratishda xato: %s", e)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(default, f, ensure_ascii=False, indent=2)
         return default
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
-        logger.exception("Faylni o'qishda xato (%s): %s", path, e)
+    except:
         return default
 
 def save_json(path: str, data: Any):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.exception("Faylga yozishda xato (%s): %s", path, e)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
 # --------------------
-# Ma'lumotlar yuklanishi (runtime)
+# Ma'lumotlar yuklash
 # --------------------
 currencies: Dict[str, Any] = load_json(CURRENCIES_FILE, {})
 users: Dict[str, Any] = load_json(USERS_FILE, {})
 orders: Dict[str, Any] = load_json(ORDERS_FILE, {})
 
 # --------------------
-# FSM (Buy/Sell/Admin) — kengaytirilgan holatlar
+# FSM holatlar
 # --------------------
 class BuyFSM(StatesGroup):
     choose_currency = State()
     amount = State()
     wallet = State()
     confirm = State()
-    upload = State()    # foydalanuvchi chek (photo/doc) yuboradi
+    upload = State()
 
 class SellFSM(StatesGroup):
     choose_currency = State()
     amount = State()
     wallet = State()
     confirm = State()
-    upload = State()    # foydalanuvchi chek (photo/doc) yuboradi
+    upload = State()
 
 class AdminFSM(StatesGroup):
     main = State()
@@ -99,14 +90,14 @@ class AdminFSM(StatesGroup):
     broadcast_message = State()
     confirm_broadcast = State()
 
+class UserMsgFSM(StatesGroup):
+    waiting_text = State()
+
 # --------------------
-# Util funksiyalar
+# Foydali funksiyalar
 # --------------------
 def is_admin(user_id) -> bool:
-    try:
-        return int(user_id) == int(ADMIN_ID)
-    except:
-        return False
+    return int(user_id) == int(ADMIN_ID)
 
 def ensure_user(uid: int, tg_user: types.User = None):
     key = str(uid)
@@ -123,24 +114,33 @@ def ensure_user(uid: int, tg_user: types.User = None):
 def new_order_id() -> str:
     return str(int(time.time() * 1000))
 
-# Klaviaturalar (markup)
+async def admin_notify(text: str):
+    try:
+        await bot.send_message(ADMIN_ID, f"📢 *Admin xabari:*\n{text}", parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Adminga xabar yuborilmadi: {e}")
+
+# --------------------
+# Klaviaturalar
+# --------------------
 def main_menu_kb(uid: int = None) -> types.ReplyKeyboardMarkup:
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(types.KeyboardButton("💲 Sotib olish"), types.KeyboardButton("💰 Sotish"))
-    kb.row(types.KeyboardButton("📋 Mening buyurtmalarim"))
+    kb.row("💲 Sotib olish", "💰 Sotish")
+    kb.row("📋 Mening buyurtmalarim")
+    kb.row("✉️ Adminga yozish")
     if uid and is_admin(uid):
-        kb.add(types.KeyboardButton("⚙️ Admin Panel"))
+        kb.add("⚙️ Admin Panel")
     return kb
 
-def back_kb() -> types.ReplyKeyboardMarkup:
+def back_kb():
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
+    kb.add("⏹️ Bekor qilish")
     return kb
 
-def small_cancel_kb() -> types.ReplyKeyboardMarkup:
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    kb.add(types.KeyboardButton("🔙 Orqaga"))
-    kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
+def admin_order_kb(order_id: str):
+    kb = types.InlineKeyboardMarkup()
+    kb.add(types.InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"))
+    kb.add(types.InlineKeyboardButton("❌ Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
     return kb
 
 # Inline admin-order tugmalari uchun yordamchi
@@ -595,7 +595,23 @@ async def admin_panel(message: types.Message):
     kb.row("⬅️ Orqaga")
     await message.answer("⚙️ Admin panel menyusi:", reply_markup=kb)
     await AdminFSM.main.set()
+# obmen_bot_part5.py
+# -*- coding: utf-8 -*-
+from obmen_bot_part4 import *
 
+# --------------------
+# Admin panel
+# --------------------
+@dp.message_handler(lambda m: m.text == "⚙️ Admin Panel")
+async def admin_panel(message: types.Message):
+    if not is_admin(message.from_user.id):
+        await message.answer("Siz admin emassiz.")
+        return
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.row("📢 Xabar yuborish")
+    kb.row("⏹️ Chiqish")
+    await message.answer("⚙️ Admin panelga xush kelibsiz.", reply_markup=kb)
+    await AdminFSM.main.set()
 
 # --------------------
 # ADMIN — Valyuta qo‘shish
