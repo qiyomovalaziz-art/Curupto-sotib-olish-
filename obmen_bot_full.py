@@ -143,61 +143,41 @@ def admin_order_kb(order_id: str):
     kb.add(types.InlineKeyboardButton("❌ Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
     return kb
 
-# Inline admin-order tugmalari uchun yordamchi
-def admin_order_kb(order_id: str) -> types.InlineKeyboardMarkup:
-    kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"))
-    kb.add(types.InlineKeyboardButton("❌ Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
-    return kb
-
-# --------------------
-# Qism 1/6 yakun — bu fayl qolgan 5 qism bilan birlashtiriladi.
-# --------------------
-# Ushbu qismda: sozlamalar, fayl yordamchilari, FSM va umumiy utilitilar mavjud.
-# Eslatma: API_TOKEN va ADMIN_ID muhit o'zgaruvchilari orqali ham berilishi mumkin.
 # obmen_bot_part2.py
 # -*- coding: utf-8 -*-
 from aiogram import types
 from aiogram.dispatcher import FSMContext
-
-# Assumptions: `dp`, `bot`, `currencies`, `users`, `orders`,
-# `ensure_user`, `main_menu_kb`, `back_kb`, `BuyFSM`, `SellFSM`, `new_order_id`, `save_json`,
-# `USERS_FILE`, `ORDERS_FILE`, `CURRENCIES_FILE` are imported from part1 (or in same module).
+from obmen_bot_part1 import *
 
 # --------------------
-# /start va yordamchi komandalar
+# START va asosiy menyu
 # --------------------
-@dp.message_handler(commands=["start", "help"])
-async def cmd_start(message: types.Message):
+@dp.message_handler(commands=['start'])
+async def start_cmd(message: types.Message):
     ensure_user(message.from_user.id, message.from_user)
     await message.answer(
-        f"Assalomu alaykum, {message.from_user.first_name}! 👋\n"
-        "Bu bot orqali valuta sotib olishingiz va sotishingiz mumkin.",
+        f"👋 Salom, {message.from_user.full_name}!\n\n"
+        "Bu bot orqali siz kriptovalyuta sotib olishingiz yoki sotishingiz mumkin.",
         reply_markup=main_menu_kb(message.from_user.id)
     )
 
+# --------------------
+# Buyurtmalar ro'yxati
+# --------------------
 @dp.message_handler(lambda m: m.text == "📋 Mening buyurtmalarim")
-async def my_orders_handler(message: types.Message):
+async def my_orders(message: types.Message):
     uid = str(message.from_user.id)
-    ensure_user(message.from_user.id, message.from_user)
-    user_orders = users.get(uid, {}).get("orders", [])
-    if not user_orders:
-        await message.answer("Sizda hozircha buyurtma yoʻq.", reply_markup=main_menu_kb(message.from_user.id))
+    user = ensure_user(message.from_user.id, message.from_user)
+    if not user["orders"]:
+        await message.answer("Sizda hali buyurtmalar yo‘q.", reply_markup=main_menu_kb(message.from_user.id))
         return
 
-    texts = []
-    for oid in user_orders[-10:][::-1]:  # oxirgi 10 ta buyurtma (teskari tartibda)
+    text = "📋 Sizning buyurtmalaringiz:\n\n"
+    for oid in user["orders"]:
         o = orders.get(oid)
-        if not o:
-            continue
-        t = (f"ID: {o['id']}\n"
-             f"Turi: {o['type']}\n"
-             f"Valyuta: {o['currency']}\n"
-             f"Miqdor: {o['amount']}\n"
-             f"Holat: {o.get('status','-')}\n"
-             f"Yaratilgan: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(o.get('created_at',0)))}")
-        texts.append(t)
-    await message.answer("\n\n".join(texts), reply_markup=main_menu_kb(message.from_user.id))
+        if o:
+            text += f"🆔 ID: {oid}\n💱 {o['type'].upper()} — {o['currency']}\n💰 Miqdor: {o['amount']}\n📅 Sana: {o['date']}\n\n"
+    await message.answer(text, reply_markup=main_menu_kb(message.from_user.id))
 
 # --------------------
 # Buy (Sotib olish) — boshlash va tanlash
