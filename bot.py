@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMedia
 
 # ===== CONFIG =====
 TOKEN = "8245974811:AAEkryr5_vYZ4m_1M8D56tIrViMe3Iwhmpc"
-ADMIN_ID = 7973934849  # Admin ID
+ADMIN_ID = 6634425074  # Admin ID
 
 bot = Bot(TOKEN)
 dp = Dispatcher(bot)
