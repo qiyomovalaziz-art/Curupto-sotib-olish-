@@ -9,7 +9,7 @@ from telegram.ext import Updater, CommandHandler, CallbackContext
 
 # ---------- SOZLAMALAR ----------
 BOT_TOKEN = os.environ.get("BOT_TOKEN") or "<SENING_BOT_TOKEN>"
-OWNER_ID = int(os.environ.get("OWNER_ID") or 123456789)  # O'ZGARTIR
+OWNER_ID = int(os.environ.get("OWNER_ID") or 7973934849)  # O'ZGARTIR
 # ---------------------------------
 
 logging.basicConfig(
