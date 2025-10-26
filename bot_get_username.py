@@ -2,9 +2,10 @@
 # coding: utf-8
 
 import logging
+import os
 from telegram import Update, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackContext
-import os
+from telegram.utils.helpers import escape_html
 
 # ---------- SOZLAMALAR ----------
 BOT_TOKEN = os.environ.get("BOT_TOKEN") or "<SENING_BOT_TOKEN>"
@@ -28,7 +29,6 @@ def help_cmd(update: Update, context: CallbackContext):
 
 def get_user(update: Update, context: CallbackContext):
     user = update.effective_user
-    chat_id = update.effective_chat.id
 
     # Faqat ownerga ruxsat
     if user.id != OWNER_ID:
@@ -52,18 +52,28 @@ def get_user(update: Update, context: CallbackContext):
 
     # Ma'lumotni formatlab yuborish
     username = getattr(chat, "username", None)
-    first_name = getattr(chat, "first_name", "")
-    last_name = getattr(chat, "last_name", "")
+    first_name = getattr(chat, "first_name", "") or ""
+    last_name = getattr(chat, "last_name", "") or ""
     full_name = (first_name + " " + last_name).strip()
 
-    text = f"<b>Natija:</b>\n"
-    text += f"ID: <code>{chat.id}</code>\n"
-    if username:
-        text += f"Username: @{username}\n"
+    # fallback matnni avval o'zgaruvchiga ajratamiz (f-string ichida backslash bo'lishi mumkin emas)
+    fallback = "ma'lumot yo'q"
+    name_display = full_name if full_name else fallback
+
+    # HTML uchun xavfsiz qilish
+    id_html = escape_html(str(chat.id))
+    username_html = escape_html(username) if username else None
+    name_html = escape_html(name_display)
+    type_html = escape_html(str(chat.type))
+
+    text = "<b>Natija:</b>\n"
+    text += f"ID: <code>{id_html}</code>\n"
+    if username_html:
+        text += f"Username: @{username_html}\n"
     else:
         text += "Username: (yo'q)\n"
-    text += f"Ism: {full_name if full_name else '(ma\'lumot yo\'q)'}\n"
-    text += f"Type: {chat.type}\n"
+    text += f"Ism: {name_html}\n"
+    text += f"Type: {type_html}\n"
 
     update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
