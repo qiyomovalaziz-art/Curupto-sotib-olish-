@@ -2,90 +2,76 @@
 # coding: utf-8
 
 import logging
-import os
 import html
-from telegram import Update, ParseMode
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram import Update, ParseMode, KeyboardButton, ReplyKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import os
 
-# ---------- SOZLAMALAR ----------
-BOT_TOKEN = os.environ.get("BOT_TOKEN") or "<SENING_BOT_TOKEN>"
-OWNER_ID = int(os.environ.get("OWNER_ID") or 7973934849)  # O'ZGARTIR
-# ---------------------------------
+BOT_TOKEN = os.environ.get("BOT_TOKEN") or "<BU YERGA BOT TOKENNI YOZ>"
+OWNER_ID = int(os.environ.get("OWNER_ID") or 7973934849)  # O'zingning ID'ing
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
+user_phone_numbers = {}  # ID → phone_number saqlash uchun
 
 def start(update: Update, context: CallbackContext):
+    keyboard = [[KeyboardButton("📱 Raqamimni yuborish", request_contact=True)]]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
+
     update.message.reply_text(
-        "Salom! Men ID → Username aniqlovchi botman.\n\n"
-        "Foydalanish: /get <user_id>\n\n"
-        "Bu komanda faqat bot egasiga ruxsat etilgan."
+        "Salom! Men ID → Username → (agar mavjud bo'lsa) telefon raqam ko'rsatadigan botman.\n\n"
+        "Raqamingizni ulashsangiz — sizning raqamingiz saqlanadi.",
+        reply_markup=reply_markup
     )
 
-
-def help_cmd(update: Update, context: CallbackContext):
-    update.message.reply_text("Foydalanish: /get <user_id>")
-
+def contact_handler(update: Update, context: CallbackContext):
+    contact = update.message.contact
+    user_phone_numbers[contact.user_id] = contact.phone_number
+    update.message.reply_text("✅ Telefon raqamingiz saqlandi.")
 
 def get_user(update: Update, context: CallbackContext):
-    user = update.effective_user
-
-    if user.id != OWNER_ID:
-        update.message.reply_text("❌ Sizda ruxsat yo‘q.")
+    if update.effective_user.id != OWNER_ID:
+        update.message.reply_text("❌ Sizga ruxsat yo'q.")
         return
 
     if not context.args:
-        update.message.reply_text("Iltimos: /get <user_id> shaklida yuboring.")
+        update.message.reply_text("Foydalanish:\n/get <user_id>")
         return
 
-    target_id = context.args[0]
+    user_id = context.args[0]
 
     try:
-        chat = context.bot.get_chat(chat_id=target_id)
+        chat = context.bot.get_chat(user_id)
     except Exception as e:
-        update.message.reply_text(f"Xato yoki ma'lumot topilmadi:\n\n{e}")
+        update.message.reply_text(f"❌ Topilmadi yoki xato: {e}")
         return
 
-    username = chat.username
-    first_name = getattr(chat, "first_name", "")
-    last_name = getattr(chat, "last_name", "")
-    name_display = (first_name + " " + last_name).strip()
+    full_name = (chat.first_name or "") + " " + (chat.last_name or "")
+    full_name = full_name.strip() or "(yo'q)"
+    username = f"@{chat.username}" if chat.username else "(yo'q)"
 
-    text = (
-        f"<b>Natija:</b>\n"
-        f"ID: <code>{html.escape(str(chat.id))}</code>\n"
-        f"Username: @{html.escape(username) if username else 'yo‘q'}\n"
-        f"Ism: {html.escape(name_display) if name_display else 'yo‘q'}\n"
-        f"Type: {html.escape(str(chat.type))}\n"
-    )
+    phone = user_phone_numbers.get(chat.id, "(telefon saqlanmagan)")
+
+    text = f"""
+<b>Natija:</b>
+ID: <code>{chat.id}</code>
+Username: {html.escape(username)}
+Ism: {html.escape(full_name)}
+Telefon: {html.escape(phone)}
+"""
 
     update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
-
-def error_handler(update: Update, context: CallbackContext):
-    logger.error("Xato yuz berdi:", exc_info=context.error)
-
-
 def main():
-    if not BOT_TOKEN:
-        print("❌ BOT_TOKEN kiritilmagan!")
-        return
-
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help_cmd))
-    dp.add_handler(CommandHandler("get", get_user, pass_args=True))
-    dp.add_error_handler(error_handler)
+    dp.add_handler(CommandHandler("get", get_user))
+    dp.add_handler(MessageHandler(Filters.contact, contact_handler))
 
-    print("✅ Bot ishga tushdi... Ctrl+C bilan to‘xtatish mumkin.")
     updater.start_polling()
     updater.idle()
-
 
 if __name__ == "__main__":
     main()
