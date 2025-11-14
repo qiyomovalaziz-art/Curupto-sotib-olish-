@@ -1,0 +1,9 @@
+{
+  "USDT": {
+    "name": "Tether",
+    "buy_rate": 10500,
+    "sell_rate": 11000,
+    "buy_card": "1111 2222 ...",
+    "sell_card": "3333 4444 ..."
+  }
+}
