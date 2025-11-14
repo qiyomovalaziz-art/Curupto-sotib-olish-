@@ -1,1 +1,1 @@
-worker: obmen_bot.py
+worker: python obmen_bot.py
