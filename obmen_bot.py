@@ -135,7 +135,7 @@ def is_working_hours():
 
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("📤 Sotish kursi 📉", "📱 Sotib olish kursi 📈")
+    kb.row("📊 Sotish kursi ", " 📊Sotib olish kursi ")
     kb.row("💲 Sotib olish", "💰 Sotish")
     kb.row("📋 Mening buyurtmalarim", "🕒 Ish vaqti")
     kb.row("📖 Foydalanish qo'llanmasi", "💳 Karta va kripto zaxiralari")
