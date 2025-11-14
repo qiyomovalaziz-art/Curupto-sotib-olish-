@@ -15,7 +15,7 @@ from aiogram.dispatcher import FSMContext
 # Sozlamalar
 # --------------------
 os.environ["TZ"] = "Asia/Tashkent"
-API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "7644659937:AAHy_LuhZ8Wi_ba22MRp6Ksy4xV1xXV_6O8")
+API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "8354205597:AAEcrLWyev71QVuYA-fVbIzsfxXEm8Wch7g")
 ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "7973934849"))
 
 DATA_DIR = "bot_data"
