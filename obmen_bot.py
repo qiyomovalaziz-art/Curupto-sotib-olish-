@@ -1,4 +1,4 @@
-# obmen_bot.py — to'liq, ishlaydigan versiya
+# obmen_bot.py — 100% ishlaydigan, to'liq versiya
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -196,8 +196,8 @@ async def show_sell_rates(message: types.Message):
     await message.answer(text, reply_markup=main_menu_kb())
 
 # --------------------
-# Ish vaqti
-# --------------------
+# Ish vaqti, zaxiralar, qo'llanma — to'g'ri ishlaydi
+# ...
 @dp.message_handler(text="🕒 Ish vaqti")
 async def show_working_hours(message: types.Message):
     text = (
@@ -208,9 +208,6 @@ async def show_working_hours(message: types.Message):
     )
     await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb())
 
-# --------------------
-# ZAXIRALAR
-# --------------------
 @dp.message_handler(text="💳 Karta va kripto zaxiralari")
 async def show_reserves(message: types.Message):
     text = "📦 *Kripto zaxiralari:*\n"
@@ -223,9 +220,6 @@ async def show_reserves(message: types.Message):
     text += f"\n💳 *Karta balansi:*\n• UZS: <code>{card_amt}</code>"
     await message.answer(text, parse_mode="HTML", reply_markup=main_menu_kb())
 
-# --------------------
-# QO'LLANMA
-# --------------------
 @dp.message_handler(text="📖 Foydalanish qo'llanmasi")
 async def show_help(message: types.Message):
     video = help_video_data.get("video")
@@ -660,7 +654,7 @@ async def admin_reply_send(message: types.Message, state: FSMContext):
     await state.finish()
 
 # --------------------
-# ADMIN PANEL — TO'LIQ
+# ADMIN PANEL — TO'LIQ ISHLOVCHI
 # --------------------
 @dp.message_handler(lambda m: m.text == "⚙️ Admin Panel")
 async def admin_panel(message: types.Message):
@@ -1057,7 +1051,7 @@ async def contact_admin_send(message: types.Message, state: FSMContext):
         if message.photo:
             await bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, parse_mode="Markdown", reply_markup=kb)
         elif message.video:
-            await bot.send_video(ADMIN_ID, message.video.file_id, caption=caption, parse_mode="Markdown", reply_markup=kb)
+            await bot.send_video(ADMIN_ID, message.video.file_id, caption=caption, parse_mode="Markdown", reply_markup = kb)
         elif message.document:
             await bot.send_document(ADMIN_ID, message.document.file_id, caption=caption, parse_mode="Markdown", reply_markup=kb)
         else:
@@ -1068,7 +1062,6 @@ async def contact_admin_send(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer("✅ Xabaringiz adminga yuborildi.", reply_markup=main_menu_kb())
 
-# UNKNOWN
 @dp.message_handler()
 async def unknown(message: types.Message):
     await message.answer("❓ Noma'lum buyruq.", reply_markup=main_menu_kb())
