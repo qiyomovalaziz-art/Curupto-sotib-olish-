@@ -1,1 +1,1 @@
-worker: python bot_get_username.py
+worker: python obmen_bot.py
