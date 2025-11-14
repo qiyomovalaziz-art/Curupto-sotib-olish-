@@ -10,7 +10,6 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
-
 os.environ["TZ"] = "Asia/Tashkent"
 API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "8354205597:AAEcrLWyev71QVuYA-fVbIzsfxXEm8Wch7g")
 ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "7973934849"))
@@ -22,11 +21,9 @@ ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
 HELP_VIDEO_FILE = os.path.join(DATA_DIR, "help_video.json")
 RESERVES_FILE = os.path.join(DATA_DIR, "reserves.json")
 CARD_BALANCE_FILE = os.path.join(DATA_DIR, "card_balance.json")
-
 os.makedirs(DATA_DIR, exist_ok=True)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
-
 storage = MemoryStorage()
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot, storage=storage)
@@ -42,7 +39,7 @@ def load_json(path: str, default: Any):
         logger.exception("Faylni o'qishda xato (%s): %s", path, e)
         return default
 
-def save_json(path: str,  Any):
+def save_json(path: str, data: Any):
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -126,7 +123,8 @@ def is_working_hours():
 
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("📤 Sotish kursi 📉", "📱 Sotib olish kursi 📈")
+    # TUGMALARNI JOYINI ALMASHTIRISH — Sotish chapda, Sotib olish o'ngda
+    kb.row("📉 Sotish kursi", "📈 Sotib olish kursi")
     kb.row("💲 Sotib olish", "💰 Sotish")
     kb.row("📋 Mening buyurtmalarim", "🕒 Ish vaqti")
     kb.row("📖 Foydalanish qo'llanmasi", "💳 Karta va kripto zaxiralari")
@@ -147,8 +145,11 @@ def admin_order_kb(order_id: str, user_id: int) -> types.InlineKeyboardMarkup:
     kb.add(types.InlineKeyboardButton("✉️ Foydalanuvchiga xabar", callback_data=f"admin_order|message_user|{user_id}"))
     return kb
 
+# ❌ FOYDALANUVCHILAR KURSLARNI KO'RISH HUQUQI YO'Q — FAQAT ADMIN
 @dp.message_handler(lambda m: "Sotib olish kursi" in m.text)
 async def show_buy_rates(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("⛔ Bu ma'lumot faqat admin uchun.")
     if not currencies:
         return await message.answer("⚠️ Hozircha valyuta mavjud emas.")
     text = "📈 *Sotib olish kurslari (Biz sotamiz):*\n"
@@ -164,6 +165,8 @@ async def show_buy_rates(message: types.Message):
 
 @dp.message_handler(lambda m: "Sotish kursi" in m.text)
 async def show_sell_rates(message: types.Message):
+    if not is_admin(message.from_user.id):
+        return await message.answer("⛔ Bu ma'lumot faqat admin uchun.")
     if not currencies:
         return await message.answer("⚠️ Hozircha valyuta mavjud emas.")
     text = "📉 *Sotish kurslari (Biz sotib olamiz):*\n"
