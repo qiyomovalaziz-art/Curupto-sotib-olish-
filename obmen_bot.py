@@ -47,7 +47,7 @@ def load_json(path: str, default: Any):
         logger.exception("Faylni o'qishda xato (%s): %s", path, e)
         return default
 
-def save_json(path: str,  Any):
+def save_json(path: str, data: Any):
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -135,7 +135,7 @@ def is_working_hours():
 
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("📤 Sotish kursi 📉", "📱 Sotib olish kursi 📈")  # ✅ Emoji qo'shildi
+    kb.row("📤 Sotish kursi 📉", "📱 Sotib olish kursi 📈")
     kb.row("💲 Sotib olish", "💰 Sotish")
     kb.row("📋 Mening buyurtmalarim", "🕒 Ish vaqti")
     kb.row("📖 Foydalanish qo'llanmasi", "💳 Karta va kripto zaxiralari")
@@ -183,8 +183,7 @@ async def show_sell_rates(message: types.Message):
     await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb())
 
 # --------------------
-# Ish vaqti, Zaxira, Qo'llanma, START, Buy/Sell, Admin panel — O'ZGARMAYDI
-# (Sizning asosiy logikangiz to'g'ri ishlaydi, faqat kanal yuborishda kichik tuzatish kerak)
+# Ish vaqti
 # --------------------
 @dp.message_handler(text="🕒 Ish vaqti")
 async def show_working_hours(message: types.Message):
@@ -196,6 +195,9 @@ async def show_working_hours(message: types.Message):
     )
     await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb())
 
+# --------------------
+# ZAXIRALAR — kripto + karta
+# --------------------
 @dp.message_handler(text="💳 Karta va kripto zaxiralari")
 async def show_reserves(message: types.Message):
     text = "📦 *Kripto zaxiralari:*\n"
@@ -208,6 +210,9 @@ async def show_reserves(message: types.Message):
     text += f"\n💳 *Karta balansi:*\n• UZS: <code>{card_amt}</code>"
     await message.answer(text, parse_mode="HTML", reply_markup=main_menu_kb())
 
+# --------------------
+# QO'LLANMA
+# --------------------
 @dp.message_handler(text="📖 Foydalanish qo'llanmasi")
 async def show_help(message: types.Message):
     video = help_video_data.get("video")
@@ -221,6 +226,9 @@ async def show_help(message: types.Message):
     else:
         await message.answer(text, reply_markup=main_menu_kb())
 
+# --------------------
+# START
+# --------------------
 @dp.message_handler(commands=["start", "help"])
 async def cmd_start(message: types.Message):
     uid_str = str(message.from_user.id)
@@ -243,11 +251,36 @@ async def cmd_start(message: types.Message):
     )
 
 # --------------------
-# BUY / SELL — O'ZGARMAYDI
+# BUYURTMA TARIXI
 # --------------------
-# (Sizning buy/sell kodingiz to'g'ri ishlaydi — faqat kanalga yuborish qismiga tuzatish kiritildi)
+@dp.message_handler(text="📋 Mening buyurtmalarim")
+async def my_orders(message: types.Message):
+    uid = str(message.from_user.id)
+    ensure_user(message.from_user.id, message.from_user)
+    user_orders = users.get(uid, {}).get("orders", [])
+    if not user_orders:
+        return await message.answer("📭 Sizda buyurtmalar mavjud emas.", reply_markup=main_menu_kb(uid))
+    text = "🧾 *Sizning so‘nggi buyurtmalaringiz:*\n"
+    for oid in user_orders[-10:][::-1]:
+        o = orders.get(oid)
+        if not o:
+            continue
+        created = o["created_at"] + 5 * 3600
+        date_str = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(created))
+        text += (
+            f"ID: `{o['id']}`\n"
+            f"Turi: {o['type']}\n"
+            f"Valyuta: {o['currency']}\n"
+            f"Miqdor: {o['amount']}\n"
+            f"Holat: {o.get('status', '—')}\n"
+            f"Yaratilgan: {date_str}\n"
+            f"———————————————\n"
+        )
+    await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb(uid))
 
+# --------------------
 # SOTIB OLISH
+# --------------------
 @dp.message_handler(lambda message: message.text == "💲 Sotib olish")
 async def buy_start(message: types.Message):
     if not is_working_hours():
@@ -270,9 +303,143 @@ async def buy_start(message: types.Message):
     await message.answer("Qaysi valyutani sotib olmoqchisiz?", reply_markup=kb)
     await BuyFSM.choose_currency.set()
 
-# ... (BuyFSM qolgan qismlari o'zgarmaydi — siznikiga aynan mos keladi)
+@dp.message_handler(state=BuyFSM.choose_currency)
+async def buy_choose_currency(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    if message.text not in currencies:
+        await message.answer("Bunday valyuta topilmadi.")
+        return
+    await state.update_data(currency=message.text)
+    await message.answer("Miqdorni kiriting:")
+    await BuyFSM.next()
 
+@dp.message_handler(state=BuyFSM.amount)
+async def buy_amount_handler(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Operatsiya bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    try:
+        amt = float(message.text.replace(",", "."))
+        if amt <= 0:
+            raise ValueError()
+    except:
+        await message.answer("Iltimos, to'g'ri miqdor kiriting (masalan: 0.5 yoki 10).")
+        return
+    data = await state.get_data()
+    currency = data.get("currency")
+    if not currency:
+        await state.finish()
+        await message.answer("Xatolik: valyuta tanlanmagan.")
+        return
+    current_reserve = reserves.get(currency, 0)
+    if amt > current_reserve:
+        await message.answer(
+            f"Kechirasiz, {currency} dan faqat {current_reserve} mavjud.\n"
+            f"Iltimos, kamroq miqdor kiriting yoki '⏹️ Bekor qilish' tugmasini bosing."
+        )
+        return
+    await state.update_data(amount=amt)
+    await message.answer("Hamyon raqamingizni kiriting:", reply_markup=back_kb())
+    await BuyFSM.next()
+
+@dp.message_handler(state=BuyFSM.wallet)
+async def buy_wallet_handler(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    await state.update_data(wallet=message.text.strip())
+    data = await state.get_data()
+    currency = data["currency"]
+    amt = data["amount"]
+    cur_info = currencies.get(currency, {})
+    sell_rate = cur_info.get("sell_rate")
+    if sell_rate is None:
+        await message.answer("Narx ma'lum emas.")
+        await state.finish()
+        return
+    total = round(amt * float(sell_rate), 2)
+    card = cur_info.get("sell_card", "5614 6818 7267 2690")
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb.add(types.KeyboardButton("Chek yuborish"))
+    kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
+    await message.answer(
+        f"🔔 Toʻlov tafsilotlari:\n"
+        f"Karta/Hisob: {card}\n"
+        f"Valyuta: {currency}\n"
+        f"Miqdor: {amt}\n"
+        f"Narx: {sell_rate}\n"
+        f"Jami: {total} UZS\n"
+        f"'Chek yuborish' tugmasini bosing.",
+        reply_markup=kb
+    )
+    await BuyFSM.confirm.set()
+
+@dp.message_handler(state=BuyFSM.confirm)
+async def buy_confirm_handler(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    if message.text != "Chek yuborish":
+        await message.answer("‘Chek yuborish’ tugmasini bosing.")
+        return
+    await message.answer("✅ Chekni yuboring:", reply_markup=back_kb())
+    await BuyFSM.upload.set()
+
+@dp.message_handler(content_types=['photo', 'document'], state=BuyFSM.upload)
+async def buy_upload_handler(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    order_id = new_order_id()
+    order = {
+        "id": order_id,
+        "user_id": message.from_user.id,
+        "currency": data["currency"],
+        "amount": data["amount"],
+        "wallet": data["wallet"],
+        "type": "buy",
+        "status": "waiting_admin",
+        "created_at": int(time.time()),
+        "rate": currencies[data["currency"]]["sell_rate"],
+        "photo_file_id": message.photo[-1].file_id if message.photo else None,
+        "document_file_id": message.document.file_id if message.document else None,
+    }
+    orders[order_id] = order
+    uid = str(message.from_user.id)
+    users.setdefault(uid, ensure_user(message.from_user.id, message.from_user))
+    users[uid].setdefault("orders", []).append(order_id)
+    save_json(ORDERS_FILE, orders)
+    save_json(USERS_FILE, users)
+    caption = (
+        f"🆕 Yangi BUY buyurtma\n"
+        f"👤 Foydalanuvchi: {message.from_user.full_name}\n"
+        f"ID: {message.from_user.id}\n"
+        f"Valyuta: {data['currency']}\n"
+        f"Miqdor: {data['amount']}\n"
+        f"Hamyon: {data['wallet']}\n"
+        f"Buyurtma ID: {order_id}"
+    )
+    kb = admin_order_kb(order_id, message.from_user.id)
+    try:
+        if message.photo:
+            await bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, reply_markup=kb)
+        else:
+            await bot.send_document(ADMIN_ID, message.document.file_id, caption=caption, reply_markup=kb)
+    except Exception as e:
+        logger.exception("Adminga yuborishda xato: %s", e)
+        await message.answer("❌ Xatolik yuz berdi.")
+        await state.finish()
+        return
+    await message.answer("✅ Chek adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await state.finish()
+
+# --------------------
 # SOTISH
+# --------------------
 @dp.message_handler(lambda message: message.text == "💰 Sotish")
 async def sell_start(message: types.Message):
     if not is_working_hours():
@@ -294,15 +461,129 @@ async def sell_start(message: types.Message):
     await message.answer("Qaysi valyutani sotmoqchisiz?", reply_markup=kb)
     await SellFSM.choose_currency.set()
 
-# ... (SellFSM qolgan qismlari ham o'zgarmaydi)
+@dp.message_handler(state=SellFSM.choose_currency)
+async def sell_choose_currency(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    if message.text not in currencies:
+        await message.answer("Bunday valyuta topilmadi.")
+        return
+    await state.update_data(currency=message.text)
+    await message.answer("Miqdorni kiriting:")
+    await SellFSM.next()
+
+@dp.message_handler(state=SellFSM.amount)
+async def sell_amount_handler(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    try:
+        amt = float(message.text.replace(",", "."))
+        if amt <= 0:
+            raise ValueError()
+    except:
+        await message.answer("Iltimos, to'g'ri miqdor kiriting.")
+        return
+    await state.update_data(amount=amt)
+    await message.answer("Hamyon raqamingizni kiriting:", reply_markup=back_kb())
+    await SellFSM.next()
+
+@dp.message_handler(state=SellFSM.wallet)
+async def sell_wallet_handler(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    await state.update_data(wallet=message.text.strip())
+    data = await state.get_data()
+    currency = data["currency"]
+    amt = data["amount"]
+    cur_info = currencies.get(currency, {})
+    buy_rate = cur_info.get("buy_rate")
+    if buy_rate is None:
+        await message.answer("Narx ma'lum emas.")
+        await state.finish()
+        return
+    total = round(amt * float(buy_rate), 2)
+    card = cur_info.get("buy_card", "5614 6818 7267 2690")
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb.add(types.KeyboardButton("Chek yuborish"))
+    kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
+    await message.answer(
+        f"🔔 To‘lov tafsilotlari:\n"
+        f"Karta/Hisob: {card}\n"
+        f"Valyuta: {currency}\n"
+        f"Miqdor: {amt}\n"
+        f"Narx: {buy_rate}\n"
+        f"Jami: {total} UZS\n"
+        f"'Chek yuborish' tugmasini bosing.",
+        reply_markup=kb
+    )
+    await SellFSM.confirm.set()
+
+@dp.message_handler(state=SellFSM.confirm)
+async def sell_confirm_handler(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await state.finish()
+        await message.answer("Bekor qilindi.", reply_markup=main_menu_kb(message.from_user.id))
+        return
+    if message.text != "Chek yuborish":
+        await message.answer("‘Chek yuborish’ tugmasini bosing.")
+        return
+    await message.answer("✅ Chekni yuboring:", reply_markup=back_kb())
+    await SellFSM.upload.set()
+
+@dp.message_handler(content_types=['photo', 'document'], state=SellFSM.upload)
+async def sell_upload_handler(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    order_id = new_order_id()
+    order = {
+        "id": order_id,
+        "user_id": message.from_user.id,
+        "currency": data["currency"],
+        "amount": data["amount"],
+        "wallet": data["wallet"],
+        "type": "sell",
+        "status": "waiting_admin",
+        "created_at": int(time.time()),
+        "rate": currencies[data["currency"]]["buy_rate"],
+        "photo_file_id": message.photo[-1].file_id if message.photo else None,
+        "document_file_id": message.document.file_id if message.document else None,
+    }
+    orders[order_id] = order
+    uid = str(message.from_user.id)
+    users.setdefault(uid, ensure_user(message.from_user.id, message.from_user))
+    users[uid].setdefault("orders", []).append(order_id)
+    save_json(ORDERS_FILE, orders)
+    save_json(USERS_FILE, users)
+    caption = (
+        f"🆕 Yangi SELL buyurtma\n"
+        f"👤 Foydalanuvchi: {message.from_user.full_name}\n"
+        f"ID: {message.from_user.id}\n"
+        f"Valyuta: {data['currency']}\n"
+        f"Miqdor: {data['amount']}\n"
+        f"Hamyon: {data['wallet']}\n"
+        f"Buyurtma ID: {order_id}"
+    )
+    kb = admin_order_kb(order_id, message.from_user.id)
+    try:
+        if message.photo:
+            await bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, reply_markup=kb)
+        else:
+            await bot.send_document(ADMIN_ID, message.document.file_id, caption=caption, reply_markup=kb)
+    except Exception as e:
+        logger.exception("Adminga yuborishda xato: %s", e)
+        await message.answer("❌ Xatolik yuz berdi.")
+        await state.finish()
+        return
+    await message.answer("✅ Chek adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await state.finish()
 
 # --------------------
-# BUY / SELL UPLOAD HANDLERS — O'ZGARMAYDI
-# --------------------
-# (Sizniki to'g'ri — faqat kanalga yuborishda kichik tuzatish)
-
-# --------------------
-# ADMIN CALLBACK — KANALGA XABAR YUBORISH (Tuzatilgan versiya)
+# ADMIN CALLBACK — KANALGA XABAR (Oddiy foydalanuvchi ham boradi!)
 # --------------------
 @dp.callback_query_handler(lambda c: c.data.startswith("admin_order"))
 async def admin_order_callback(call: types.CallbackQuery, state: FSMContext):
@@ -335,13 +616,11 @@ async def admin_order_callback(call: types.CallbackQuery, state: FSMContext):
             await bot.send_message(uid, f"✅ Buyurtmangiz tasdiqlandi.\nID: {order_id}")
         except:
             pass
-
-        # ✅ BU YERDA ODDIY FOYDALANUVCHI BUYURTMA HAM KANALGA BORADI
+        # ✅ HAR QANDAY FOYDALANUVCHI (ADMIN EMAS!) BO'LSA HAM BU YERDA KANALGA BORADI
         if order["type"] == "buy":
             try:
-                # Bot oddiy foydalanuvchi haqida ma'lumot olishi kerak
-                user_info = await bot.get_chat(uid)
-                full_name = user_info.full_name or f"Foydalanuvchi {uid}"
+                user = await bot.get_chat(uid)
+                full_name = user.full_name or f"Foydalanuvchi {uid}"
                 username_link = f"tg://user?id={uid}"
                 bot_info = await bot.me
                 bot_link = f"https://t.me/{bot_info.username}"
@@ -357,18 +636,15 @@ async def admin_order_callback(call: types.CallbackQuery, state: FSMContext):
                     types.InlineKeyboardButton("👤 Foydalanuvchiga o'tish", url=username_link),
                     types.InlineKeyboardButton("🤖 Botga o'tish", url=bot_link)
                 )
-                # Chek mavjud bo'lsa — uni yubor
                 if order.get("photo_file_id"):
                     await bot.send_photo(CHANNEL_USERNAME, order["photo_file_id"], caption=caption, parse_mode="HTML", reply_markup=channel_kb)
                 elif order.get("document_file_id"):
                     await bot.send_document(CHANNEL_USERNAME, order["document_file_id"], caption=caption, parse_mode="HTML", reply_markup=channel_kb)
                 else:
-                    # Chek yo'q bo'lsa ham, xabar yubor
                     await bot.send_message(CHANNEL_USERNAME, caption, parse_mode="HTML", reply_markup=channel_kb)
             except Exception as e:
                 logger.exception("Kanalga yuborishda xato: %s", e)
                 await bot.send_message(ADMIN_ID, f"❌ Kanalga yuborishda xato:\n<code>{str(e)}</code>", parse_mode="HTML")
-
         try:
             await call.message.edit_caption(f"{call.message.caption}\n✅ Tasdiqlandi.", parse_mode="HTML")
         except:
@@ -377,7 +653,6 @@ async def admin_order_callback(call: types.CallbackQuery, state: FSMContext):
             except:
                 pass
         await call.answer("Tasdiqlandi.")
-
     elif action == "reject":
         order["status"] = "❌ Bekor qilindi"
         save_json(ORDERS_FILE, orders)
@@ -397,10 +672,8 @@ async def admin_order_callback(call: types.CallbackQuery, state: FSMContext):
         await call.answer("Bekor qilindi.")
 
 # --------------------
-# QOLGAN ADMIN, ADMINGA XABAR, DEFAULT HANDLER — O'ZGARMAYDI
+# ADMIN PANEL
 # --------------------
-# (Sizniki to'g'ri ishlaydi — pastdagi qismlar o'zgarmaydi, lekin to'liqlik uchun qo'shib qo'yaman)
-
 @dp.message_handler(lambda m: m.text == "⚙️ Admin Panel")
 async def admin_panel(message: types.Message):
     if not is_admin(message.from_user.id):
@@ -485,7 +758,7 @@ async def admin_card_balance_set(message: types.Message, state: FSMContext):
     await message.answer(f"✅ Karta balansi yangilandi: {amount} UZS", reply_markup=main_menu_kb(message.from_user.id))
     await state.finish()
 
-# QO'LLANMA VIDEO
+# QO'LLANMA
 @dp.message_handler(lambda m: m.text == "🎥 Qo'llanma sozlamalari", state=AdminFSM.main)
 async def help_video_start(message: types.Message):
     await message.answer("📽️ Qo'llanma uchun videoni yuboring (yoki 'O‘chirish' deb yozing):", reply_markup=back_kb())
@@ -523,8 +796,214 @@ async def help_video_set_text(message: types.Message, state: FSMContext):
     await message.answer("✅ Qo'llanma yangilandi.", reply_markup=main_menu_kb(message.from_user.id))
     await state.finish()
 
-# VALYUTA QO'SHISH / TAHRIRLASH / O'CHIRISH — O'ZGARMAYDI
-# (Sizning kodingiz to'g'ri, qisqartirilmagan holatda ham ishlaydi)
+# VALYUTA QO'SHISH / TAHRIRLASH / O'CHIRISH — o'zgarmaydi (to'g'ri ishlaydi)
+# ... (barcha qolgan admin funksiyalari sizniki kabi, lekin to'liq qo'shilgan)
+
+@dp.message_handler(lambda m: m.text == "➕ Valyuta qo‘shish", state=AdminFSM.main)
+async def admin_add_currency_start(message: types.Message):
+    await message.answer("Yangi valyuta nomini kiriting (masalan: USDT, BTC, ETH):", reply_markup=back_kb())
+    await AdminFSM.add_choose_name.set()
+
+@dp.message_handler(state=AdminFSM.add_choose_name)
+async def admin_add_currency_name(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await admin_panel(message)
+        await state.finish()
+        return
+    name = message.text.strip().upper()
+    if name in currencies:
+        await message.answer("Bu valyuta allaqachon mavjud.")
+        return
+    await state.update_data(name=name)
+    await message.answer(f"{name} uchun **sotib olish (buy)** kursini kiriting (UZS):")
+    await AdminFSM.add_set_buy_rate.set()
+
+@dp.message_handler(state=AdminFSM.add_set_buy_rate)
+async def admin_add_currency_buy_rate(message: types.Message, state: FSMContext):
+    try:
+        rate = float(message.text.replace(",", "."))
+    except:
+        await message.answer("Raqam kiriting.")
+        return
+    await state.update_data(buy_rate=rate)
+    await message.answer("Endi **sotish (sell)** kursini kiriting (UZS):")
+    await AdminFSM.add_set_sell_rate.set()
+
+@dp.message_handler(state=AdminFSM.add_set_sell_rate)
+async def admin_add_currency_sell_rate(message: types.Message, state: FSMContext):
+    try:
+        rate = float(message.text.replace(",", "."))
+    except:
+        await message.answer("Raqam kiriting.")
+        return
+    await state.update_data(sell_rate=rate)
+    await message.answer("Valyutani **sotib olish kartasi** (karta raqami yoki hamyon manzili)ni kiriting:")
+    await AdminFSM.add_set_buy_card.set()
+
+@dp.message_handler(state=AdminFSM.add_set_buy_card)
+async def admin_add_currency_buy_card(message: types.Message, state: FSMContext):
+    await state.update_data(buy_card=message.text.strip())
+    await message.answer("Endi **sotish kartasi** (karta raqami yoki hamyon manzili)ni kiriting:")
+    await AdminFSM.add_set_sell_card.set()
+
+@dp.message_handler(state=AdminFSM.add_set_sell_card)
+async def admin_add_currency_sell_card(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    name = data["name"]
+    currencies[name] = {
+        "buy_rate": data["buy_rate"],
+        "sell_rate": data["sell_rate"],
+        "buy_card": data["buy_card"],
+        "sell_card": message.text.strip()
+    }
+    save_json(CURRENCIES_FILE, currencies)
+    await message.answer(f"✅ {name} valyutasi qo‘shildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await state.finish()
+
+@dp.message_handler(lambda m: m.text == "✏️ Valyutani tahrirlash", state=AdminFSM.main)
+async def admin_edit_currency_start(message: types.Message):
+    if not currencies:
+        await message.answer("Hech qanday valyuta mavjud emas.")
+        return
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for c in currencies.keys():
+        kb.add(types.KeyboardButton(c))
+    kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
+    await message.answer("Tahrirlamoqchi bo‘lgan valyutani tanlang:", reply_markup=kb)
+    await AdminFSM.edit_choose_currency.set()
+
+@dp.message_handler(state=AdminFSM.edit_choose_currency)
+async def admin_edit_currency_choose(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await admin_panel(message)
+        await state.finish()
+        return
+    name = message.text.strip().upper()
+    if name not in currencies:
+        await message.answer("Bunday valyuta topilmadi.")
+        return
+    await state.update_data(name=name)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    kb.row("buy_rate", "sell_rate")
+    kb.row("buy_card", "sell_card")
+    kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
+    await message.answer("Qaysi maydonni tahrirlamoqchisiz?", reply_markup=kb)
+    await AdminFSM.edit_field_choose.set()
+
+@dp.message_handler(state=AdminFSM.edit_field_choose)
+async def admin_edit_field_select(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await admin_panel(message)
+        await state.finish()
+        return
+    field = message.text.strip()
+    if field not in ["buy_rate", "sell_rate", "buy_card", "sell_card"]:
+        await message.answer("Noto‘g‘ri tanlov.")
+        return
+    await state.update_data(field=field)
+    await message.answer(f"Yangi qiymatni kiriting ({field}):")
+    await AdminFSM.edit_set_value.set()
+
+@dp.message_handler(state=AdminFSM.edit_set_value)
+async def admin_edit_value_set(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    name = data["name"]
+    field = data["field"]
+    val = message.text.strip()
+    if field in ["buy_rate", "sell_rate"]:
+        try:
+            val = float(val.replace(",", "."))
+        except:
+            await message.answer("Raqam kiriting.")
+            return
+    currencies[name][field] = val
+    save_json(CURRENCIES_FILE, currencies)
+    await message.answer(f"✅ {name} valyutasi yangilandi ({field} = {val}).", reply_markup=main_menu_kb(message.from_user.id))
+    await state.finish()
+
+@dp.message_handler(lambda m: m.text == "🗑️ Valyutani o‘chirish", state=AdminFSM.main)
+async def admin_delete_currency(message: types.Message):
+    if not currencies:
+        await message.answer("Valyutalar yo‘q.")
+        return
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for c in currencies.keys():
+        kb.add(types.KeyboardButton(c))
+    kb.add(types.KeyboardButton("⏹️ Bekor qilish"))
+    await message.answer("Qaysi valyutani o‘chirmoqchisiz?", reply_markup=kb)
+    await AdminFSM.delete_choose.set()
+
+@dp.message_handler(state=AdminFSM.delete_choose)
+async def admin_delete_currency_choose(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await admin_panel(message)
+        await state.finish()
+        return
+    name = message.text.strip().upper()
+    if name not in currencies:
+        await message.answer("Bunday valyuta topilmadi.")
+        return
+    currencies.pop(name)
+    save_json(CURRENCIES_FILE, currencies)
+    await message.answer(f"🗑️ {name} o‘chirildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await state.finish()
+
+@dp.message_handler(lambda m: m.text == "📄 Valyutalar ro‘yxati", state=AdminFSM.main)
+async def admin_list_currencies(message: types.Message):
+    if not currencies:
+        await message.answer("Hozircha valyuta mavjud emas.")
+        return
+    text = "📄 *Valyutalar ro‘yxati:*\n"
+    for k, v in currencies.items():
+        text += (f"💱 {k}\n"
+                 f"  💰 Sotib olish (biz sotamiz): {v.get('sell_rate')}\n"
+                 f"  💵 Sotish (biz sotib olamiz): {v.get('buy_rate')}\n"
+                 f"  🏦 Sotib olish kartasi: {v.get('sell_card')}\n"
+                 f"  💳 Sotish kartasi: {v.get('buy_card')}\n")
+    await message.answer(text, parse_mode="Markdown")
+
+@dp.message_handler(lambda m: m.text == "📢 Xabar yuborish", state=AdminFSM.main)
+async def admin_broadcast_start(message: types.Message):
+    await message.answer("Xabar matnini kiriting:", reply_markup=back_kb())
+    await AdminFSM.broadcast_message.set()
+
+@dp.message_handler(state=AdminFSM.broadcast_message)
+async def admin_broadcast_confirm(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await admin_panel(message)
+        await state.finish()
+        return
+    await state.update_data(text=message.text)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.row("✅ Tasdiqlash", "⏹️ Bekor qilish")
+    await message.answer("Barchaga yuborilsinmi?", reply_markup=kb)
+    await AdminFSM.confirm_broadcast.set()
+
+@dp.message_handler(state=AdminFSM.confirm_broadcast)
+async def admin_broadcast_send(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await admin_panel(message)
+        await state.finish()
+        return
+    if message.text != "✅ Tasdiqlash":
+        await message.answer("‘✅ Tasdiqlash’ tugmasini bosing.")
+        return
+    data = await state.get_data()
+    text = data["text"]
+    count = 0
+    for uid in users.keys():
+        try:
+            await bot.send_message(uid, f"📢 {text}")
+            count += 1
+        except:
+            continue
+    await message.answer(f"✅ Xabar {count} ta foydalanuvchiga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    await state.finish()
+
+@dp.message_handler(lambda m: m.text == "⬅️ Orqaga", state=AdminFSM.main)
+async def admin_back_to_main(message: types.Message, state: FSMContext):
+    await state.finish()
+    await message.answer("Asosiy menyuga qaytdingiz.", reply_markup=main_menu_kb(message.from_user.id))
 
 # Adminga xabar
 @dp.message_handler(lambda m: m.text == "📨 Adminga xabar yuborish")
