@@ -17,12 +17,13 @@ from aiogram.dispatcher import FSMContext
 os.environ["TZ"] = "Asia/Tashkent"
 API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "8354205597:AAEcrLWyev71QVuYA-fVbIzsfxXEm8Wch7g")
 ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "7973934849"))
+CHANNEL_USERNAME = "@tlovchek"  # ✅ Kanal nomi
 
 DATA_DIR = "bot_data"
 CURRENCIES_FILE = os.path.join(DATA_DIR, "currencies.json")
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 ORDERS_FILE = os.path.join(DATA_DIR, "orders.json")
-HELP_VIDEO_FILE = os.path.join(DATA_DIR, "help_video.json")  # ✅ Yangi fayl
+HELP_VIDEO_FILE = os.path.join(DATA_DIR, "help_video.json")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -46,7 +47,7 @@ def load_json(path: str, default: Any):
         logger.exception("Faylni o'qishda xato (%s): %s", path, e)
         return default
 
-def save_json(path: str, data: Any):
+def save_json(path: str,  Any):
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -88,8 +89,8 @@ class AdminFSM(StatesGroup):
     delete_choose = State()
     broadcast_message = State()
     confirm_broadcast = State()
-    help_video_set_video = State()  # ✅ Yangi
-    help_video_set_text = State()   # ✅ Yangi
+    help_video_set_video = State()
+    help_video_set_text = State()
 
 class ContactAdminFSM(StatesGroup):
     wait_message = State()
@@ -124,9 +125,9 @@ def new_order_id():
 
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("📈 Sotish kursi", "📉 Sotib olish kursi")  # ✅ Yangi
+    kb.row("📈 Sotish kursi", "📉 Sotib olish kursi")
     kb.row("💲 Sotib olish", "💰 Sotish")
-    kb.row("📋 Mening buyurtmalarim", "📖 Foydalanish qo'llanmasi")  # ✅ Yangi
+    kb.row("📋 Mening buyurtmalarim", "📖 Foydalanish qo'llanmasi")
     kb.row("📨 Adminga xabar yuborish")
     if uid and is_admin(uid):
         kb.add("⚙️ Admin Panel")
@@ -137,10 +138,11 @@ def back_kb():
     kb.add("⏹️ Bekor qilish")
     return kb
 
-def admin_order_kb(order_id: str) -> types.InlineKeyboardMarkup:
+def admin_order_kb(order_id: str, user_id: int) -> types.InlineKeyboardMarkup:
     kb = types.InlineKeyboardMarkup()
     kb.add(types.InlineKeyboardButton("✅ Tasdiqlash", callback_data=f"admin_order|confirm|{order_id}"))
     kb.add(types.InlineKeyboardButton("❌ Bekor qilish", callback_data=f"admin_order|reject|{order_id}"))
+    kb.add(types.InlineKeyboardButton("✉️ Foydalanuvchiga xabar", callback_data=f"admin_order|message_user|{user_id}"))
     return kb
 
 # --------------------
@@ -243,7 +245,7 @@ async def my_orders(message: types.Message):
     await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb(uid))
 
 # --------------------
-# Buy (Sotib olish) — butun qism
+# BUY (Sotib olish)
 # --------------------
 @dp.message_handler(lambda message: message.text == "💲 Sotib olish")
 async def buy_start(message: types.Message):
@@ -296,7 +298,7 @@ async def buy_amount_handler(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(amount=amt)
-    await message.answer("Hamyoningiz (wallet) raqamini kiriting (masalan: TRC20 address yoki hamyon id):", reply_markup=back_kb())
+    await message.answer("Hamyoningiz (wallet) raqamini kiriting:", reply_markup=back_kb())
     await BuyFSM.next()
 
 @dp.message_handler(state=BuyFSM.wallet)
@@ -331,7 +333,7 @@ async def buy_wallet_handler(message: types.Message, state: FSMContext):
         f"Miqdor: {amt}\n"
         f"Narx: {buy_rate}\n"
         f"Jami: {total} UZS\n\n"
-        f"Toʻlovni amalga oshirib, pastdagi 'Chek yuborish' tugmasi orqali toʻlov chekini (rasm yoki hujjat) yuboring.",
+        f"Toʻlovni amalga oshirib, pastdagi 'Chek yuborish' tugmasi orqali toʻlov chekini yuboring.",
         reply_markup=kb
     )
     await BuyFSM.confirm.set()
@@ -384,7 +386,7 @@ async def buy_upload_handler(message: types.Message, state: FSMContext):
         f"Buyurtma ID: {order_id}"
     )
 
-    kb = admin_order_kb(order_id)
+    kb = admin_order_kb(order_id, message.from_user.id)  # ✅ user_id qo'shildi
 
     try:
         if message.content_type == 'photo':
@@ -401,7 +403,7 @@ async def buy_upload_handler(message: types.Message, state: FSMContext):
     await state.finish()
 
 # --------------------
-# Sell (Sotish) — butun qism
+# SELL (Sotish)
 # --------------------
 @dp.message_handler(lambda message: message.text == "💰 Sotish")
 async def sell_start(message: types.Message):
@@ -543,7 +545,7 @@ async def sell_upload_handler(message: types.Message, state: FSMContext):
         f"Buyurtma ID: {order_id}"
     )
 
-    kb = admin_order_kb(order_id)
+    kb = admin_order_kb(order_id, message.from_user.id)  # ✅ user_id qo'shildi
 
     try:
         if message.content_type == 'photo':
@@ -560,20 +562,26 @@ async def sell_upload_handler(message: types.Message, state: FSMContext):
     await state.finish()
 
 # --------------------
-# Admin — buyurtmani tasdiqlash
+# ADMIN CALLBACK — yangilangan
 # --------------------
 @dp.callback_query_handler(lambda c: c.data.startswith("admin_order"))
-async def admin_order_callback(call: types.CallbackQuery):
+async def admin_order_callback(call: types.CallbackQuery, state: FSMContext):
     parts = call.data.split("|")
-    if len(parts) != 3:
-        await call.answer("Xato ma’lumot.")
-        return
+    if len(parts) < 3:
+        return await call.answer("Xato ma’lumot.")
 
-    action, order_id = parts[1], parts[2]
+    action = parts[1]
+    if action == "message_user":
+        user_id = int(parts[2])
+        await state.update_data(reply_user_id=user_id)
+        await call.message.answer("✍️ Foydalanuvchiga xabar matnini yoki rasmni yuboring:", reply_markup=back_kb())
+        await AdminReplyFSM.wait_reply.set()
+        return await call.answer("Xabar yuborish rejimi yoqildi.")
+
+    order_id = parts[2]
     order = orders.get(order_id)
     if not order:
-        await call.answer("Buyurtma topilmadi.")
-        return
+        return await call.answer("Buyurtma topilmadi.")
 
     uid = order["user_id"]
 
@@ -584,11 +592,40 @@ async def admin_order_callback(call: types.CallbackQuery):
             await bot.send_message(uid, f"✅ Sizning buyurtmangiz tasdiqlandi.\nBuyurtma ID: {order_id}")
         except:
             pass
+
+        # ✅ KANALGA XABAR
+        try:
+            user = await bot.get_chat(uid)
+            full_name = user.full_name or f"Foydalanuvchi {uid}"
+            username_link = f"tg://user?id={uid}"
+            bot_username = (await bot.me).username
+            bot_link = f"https://t.me/{bot_username}"
+
+            caption = (
+                f"👤 <b>{full_name}</b> <code>{order['amount']}</code> {order['currency']} sotib oldi!\n"
+                f"💳 Hamyon: <code>{order['wallet']}</code>"
+            )
+
+            channel_kb = types.InlineKeyboardMarkup(row_width=2)
+            channel_kb.add(
+                types.InlineKeyboardButton("👤 Foydalanuvchiga o'tish", url=username_link),
+                types.InlineKeyboardButton("🤖 Botga o'tish", url=bot_link)
+            )
+
+            await bot.send_message(
+                chat_id=CHANNEL_USERNAME,
+                text=caption,
+                parse_mode="HTML",
+                reply_markup=channel_kb
+            )
+        except Exception as e:
+            logger.exception("Kanalga xabar yuborishda xato: %s", e)
+
         try:
             await call.message.edit_caption(f"{call.message.caption}\n\n✅ Admin tomonidan tasdiqlandi.")
         except:
             pass
-        await call.answer("Tasdiqlandi.")
+        await call.answer("Tasdiqlandi va kanalga xabar yuborildi.")
 
     elif action == "reject":
         order["status"] = "❌ Bekor qilindi"
@@ -606,8 +643,9 @@ async def admin_order_callback(call: types.CallbackQuery):
     else:
         await call.answer("Noma’lum amal.")
 
+
 # --------------------
-# Admin panel
+# ADMIN PANEL va boshqa funksiyalar (o'zgarmaydi — pastda qisqartirilgan)
 # --------------------
 @dp.message_handler(lambda m: m.text == "⚙️ Admin Panel")
 async def admin_panel(message: types.Message):
@@ -618,14 +656,14 @@ async def admin_panel(message: types.Message):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row("➕ Valyuta qo‘shish", "✏️ Valyutani tahrirlash")
     kb.row("🗑️ Valyutani o‘chirish", "📄 Valyutalar ro‘yxati")
-    kb.row("🎥 Qo'llanma sozlamalari", "📢 Xabar yuborish")  # ✅ Yangi qator
+    kb.row("🎥 Qo'llanma sozlamalari", "📢 Xabar yuborish")
     kb.row("⬅️ Orqaga")
     await message.answer("⚙️ Admin panel menyusi:", reply_markup=kb)
     await AdminFSM.main.set()
 
-# --------------------
-# Qo'llanma sozlamalari (yangi)
-# --------------------
+# ... (barcha admin funksiyalari o'zgarmaydi — ular ishlayveradi)
+
+# ADMIN — QO'LLANMA SOZLAMALARI
 @dp.message_handler(lambda m: m.text == "🎥 Qo'llanma sozlamalari", state=AdminFSM.main)
 async def help_video_start(message: types.Message):
     await message.answer("📽️ Qo'llanma uchun videoni yuboring (yoki 'O‘chirish' deb yozing):", reply_markup=back_kb())
@@ -667,9 +705,7 @@ async def help_video_set_text(message: types.Message, state: FSMContext):
     await message.answer("✅ Qo'llanma yangilandi.", reply_markup=main_menu_kb(message.from_user.id))
     await state.finish()
 
-# --------------------
-# Barcha qolgan admin funksiyalari (sizniki)
-# --------------------
+# Barcha boshqa admin funksiyalari (qisqartirilgan — ular o'zgarmaydi)
 @dp.message_handler(lambda m: m.text == "➕ Valyuta qo‘shish", state=AdminFSM.main)
 async def admin_add_currency_start(message: types.Message):
     await message.answer("Yangi valyuta nomini kiriting (masalan: USDT, BTC, ETH):", reply_markup=back_kb())
@@ -882,12 +918,10 @@ async def admin_broadcast_send(message: types.Message, state: FSMContext):
     await message.answer(f"✅ Xabar {count} ta foydalanuvchiga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
     await state.finish()
 
-
 @dp.message_handler(lambda m: m.text == "⬅️ Orqaga", state=AdminFSM.main)
 async def admin_back_to_main(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer("Asosiy menyuga qaytdingiz.", reply_markup=main_menu_kb(message.from_user.id))
-
 
 # -------------------------------------------------
 # Adminga xabar yuborish
@@ -896,7 +930,6 @@ async def admin_back_to_main(message: types.Message, state: FSMContext):
 async def contact_admin_start(message: types.Message):
     await message.answer("✍️ Adminga yuboriladigan xabarni kiriting:", reply_markup=back_kb())
     await ContactAdminFSM.wait_message.set()
-
 
 @dp.message_handler(state=ContactAdminFSM.wait_message)
 async def contact_admin_send(message: types.Message, state: FSMContext):
@@ -929,7 +962,7 @@ async def contact_admin_send(message: types.Message, state: FSMContext):
     await message.answer("✅ Xabaringiz adminga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
 
 # -------------------------------------------------
-# Admindan javob
+# Admindan foydalanuvchiga javob
 # -------------------------------------------------
 @dp.callback_query_handler(lambda c: c.data.startswith("reply_to_user"))
 async def admin_reply_start(call: types.CallbackQuery, state: FSMContext):
@@ -943,11 +976,13 @@ async def admin_reply_start(call: types.CallbackQuery, state: FSMContext):
     await AdminReplyFSM.wait_reply.set()
     await call.answer()
 
-
 @dp.message_handler(content_types=['text', 'photo', 'document'], state=AdminReplyFSM.wait_reply)
 async def admin_reply_send(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    user_id = data["reply_user_id"]
+    user_id = data.get("reply_user_id")
+    if not user_id:
+        await state.finish()
+        return await message.answer("Xatolik: foydalanuvchi topilmadi.")
 
     try:
         if message.photo:
@@ -956,10 +991,10 @@ async def admin_reply_send(message: types.Message, state: FSMContext):
             await bot.send_document(user_id, message.document.file_id, caption=message.caption or "")
         else:
             await bot.send_message(user_id, message.text)
-
-        await message.answer("✅ Javob foydalanuvchiga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
-    except:
-        await message.answer("❌ Xatolik: foydalanuvchi xabarlarni qabul qila olmaydi (bloklagan).")
+        await message.answer("✅ Xabar foydalanuvchiga yuborildi.", reply_markup=main_menu_kb(message.from_user.id))
+    except Exception as e:
+        logger.exception("Foydalanuvchiga xabar yuborishda xato: %s", e)
+        await message.answer("❌ Xabar yuborib bo‘lmadi (foydalanuvchi botni bloklagan bo‘lishi mumkin).")
 
     await state.finish()
 
