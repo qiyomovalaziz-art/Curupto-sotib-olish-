@@ -1,4 +1,4 @@
-# obmen_bot.py — to'liq ishlaydigan versiya (1150+ qator)
+# obmen_bot.py — to'liq yangilangan versiya (1150+ qator)
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -97,8 +97,9 @@ class AdminFSM(StatesGroup):
     reserves_choose_currency = State()
     reserves_set_amount = State()
     card_set_amount = State()
-    broadcast_message = State()
-    confirm_broadcast = State()
+    broadcast_choose = State()
+    broadcast_target = State()
+    broadcast_media = State()
     help_video_set_video = State()
     help_video_set_text = State()
 
@@ -556,7 +557,7 @@ async def admin_panel(message: types.Message):
     kb.row("➕ Valyuta qo‘shish", "✏️ Valyutani tahrirlash")
     kb.row("🗑️ Valyutani o‘chirish", "📄 Valyutalar ro‘yxati")
     kb.row("📦 Kripto zaxiralari", "💳 Karta balansi")
-    kb.row("🎥 Qo'llanma sozlamalari", "📢 Xabar yuborish")
+    kb.row("🎥 Qo'llanma sozlamalari", "📩 Foydalanuvchilarga xabar")
     kb.row("⬅️ Orqaga")
     await message.answer("⚙️ Admin panel:", reply_markup=kb)
     await AdminFSM.main.set()
@@ -861,61 +862,82 @@ async def help_video_set_text(message: types.Message, state: FSMContext):
     await state.finish()
 
 # --------------------
-# XABAR YUBORISH — MEDIA + EMOJI TO'LIQ QO'LLAB-QUVVATLANADI
+# FOYDALANUVCHILARGA XABAR — MEDIA + EMOJI TO'LIQ QO'LLAB-QUVVATLANADI
 # --------------------
-@dp.message_handler(lambda m: m.text == "📢 Xabar yuborish", state=AdminFSM.main)
-async def admin_broadcast_start(message: types.Message):
-    await message.answer("Xabar matnini kiriting (yoki rasm+matn yuboring):", reply_markup=back_kb())
-    await AdminFSM.broadcast_message.set()
-
-@dp.message_handler(content_types=types.ContentTypes.ANY, state=AdminFSM.broadcast_message)
-async def admin_broadcast_confirm(message: types.Message, state: FSMContext):
-    if message.text == "⏹️ Bekor qilish":
-        await admin_panel(message)
-        await state.finish()
-        return
-    
-    # Saqlash
-    msg_data = {
-        "text": message.text or message.caption or "",
-        "photo": message.photo[-1].file_id if message.photo else None,
-        "video": message.video.file_id if message.video else None,
-        "document": message.document.file_id if message.document else None,
-        "caption": message.caption or ""
-    }
-    await state.update_data(msg=msg_data)
-    
+@dp.message_handler(lambda m: m.text == "📩 Foydalanuvchilarga xabar", state=AdminFSM.main)
+async def admin_msg_choose(message: types.Message):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("✅ Tasdiqlash", "⏹️ Bekor qilish")
-    await message.answer("Barchaga yuborilsinmi?", reply_markup=kb)
-    await AdminFSM.confirm_broadcast.set()
+    kb.add("👤 Bitta foydalanuvchiga")
+    kb.add("🌍 Barchasiga")
+    kb.add("⏹️ Bekor qilish")
+    await message.answer("Kimga xabar yubormoqchisiz?", reply_markup=kb)
+    await AdminFSM.broadcast_choose.set()
 
-@dp.message_handler(state=AdminFSM.confirm_broadcast)
-async def admin_broadcast_send(message: types.Message, state: FSMContext):
+@dp.message_handler(state=AdminFSM.broadcast_choose)
+async def admin_msg_target_type(message: types.Message, state: FSMContext):
     if message.text == "⏹️ Bekor qilish":
         await admin_panel(message)
         await state.finish()
         return
-    if message.text != "✅ Tasdiqlash":
-        return await message.answer("‘✅ Tasdiqlash’ tugmasini bosing.")
-    
+    if message.text == "👤 Bitta foydalanuvchiga":
+        await state.update_data(target="single")
+        await message.answer("Foydalanuvchi ID sini kiriting:")
+        await AdminFSM.broadcast_target.set()
+    elif message.text == "🌍 Barchasiga":
+        await state.update_data(target="all")
+        await message.answer("Xabarni yuboring (matn, rasm, video — emoji, format saqlanadi):")
+        await AdminFSM.broadcast_media.set()
+    else:
+        await message.answer("Noto‘g‘ri tanlov.")
+
+@dp.message_handler(state=AdminFSM.broadcast_target)
+async def admin_msg_single_id(message: types.Message, state: FSMContext):
+    if message.text == "⏹️ Bekor qilish":
+        await admin_panel(message)
+        await state.finish()
+        return
+    try:
+        uid = int(message.text.strip())
+        if str(uid) not in users:
+            await message.answer("Bunday foydalanuvchi topilmadi.")
+            return
+        await state.update_data(user_id=uid)
+        await message.answer("Xabarni yuboring (matn, rasm, video — emoji, format saqlanadi):")
+        await AdminFSM.broadcast_media.set()
+    except:
+        await message.answer("Iltimos, to'g'ri ID kiriting.")
+
+@dp.message_handler(content_types=types.ContentTypes.ANY, state=AdminFSM.broadcast_media)
+async def admin_msg_send_final(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    msg = data["msg"]
-    count = 0
-    for uid in users.keys():
+    target = data.get("target")
+    
+    async def send_to(uid):
         try:
-            if msg["photo"]:
-                await bot.send_photo(uid, msg["photo"], caption=msg["caption"])
-            elif msg["video"]:
-                await bot.send_video(uid, msg["video"], caption=msg["caption"])
-            elif msg["document"]:
-                await bot.send_document(uid, msg["document"], caption=msg["caption"])
-            elif msg["text"]:
-                await bot.send_message(uid, msg["text"])
-            count += 1
+            if message.photo:
+                await bot.send_photo(uid, message.photo[-1].file_id, caption=message.caption)
+            elif message.video:
+                await bot.send_video(uid, message.video.file_id, caption=message.caption)
+            elif message.document:
+                await bot.send_document(uid, message.document.file_id, caption=message.caption)
+            elif message.text:
+                await bot.send_message(uid, message.text)
+            return True
         except:
-            continue
-    await message.answer(f"✅ Xabar {count} ta foydalanuvchiga yuborildi.", reply_markup=main_menu_kb())
+            return False
+
+    success = 0
+    if target == "all":
+        for uid_str in users.keys():
+            if await send_to(int(uid_str)):
+                success += 1
+        await message.answer(f"✅ Xabar {success} ta foydalanuvchiga yuborildi.", reply_markup=main_menu_kb())
+    else:
+        uid = data.get("user_id")
+        if await send_to(uid):
+            await message.answer("✅ Xabar yuborildi.", reply_markup=main_menu_kb())
+        else:
+            await message.answer("❌ Xabar yuborilmadi.")
     await state.finish()
 
 # --------------------
