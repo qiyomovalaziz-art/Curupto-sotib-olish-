@@ -1,17 +1,16 @@
-# obmen_bot.py — 100% ishlaydigan to'liq kod (admin faqat kurslarni ko'radi, tugmalar joyi almashtirilgan)
+# obmen_bot.py — to'liq ishlaydigan versiya (ish vaqti + admin kurslari + tugma joyi)
 # -*- coding: utf-8 -*-
 import os
 import json
 import time
 import logging
 from datetime import datetime
+import pytz
 from typing import Dict, Any
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
-
-os.environ["TZ"] = "Asia/Tashkent"
 
 API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "8354205597:AAEcrLWyev71QVuYA-fVbIzsfxXEm8Wch7g")
 ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "7973934849"))
@@ -122,13 +121,14 @@ def new_order_id():
     return str(int(time.time() * 1000))
 
 def is_working_hours():
-    now = datetime.now()
+    tz = pytz.timezone("Asia/Tashkent")
+    now = datetime.now(tz)
     hour = now.hour
     return 8 <= hour < 22
 
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    # TUGMALARNI JOYI ALMASHTIRILGAN: Sotish chapda, Sotib olish o'ngda
+    # ✅ TUGMALARNI JOYI ALMASHTIRILGAN
     kb.row("📉 Sotish kursi", "📈 Sotib olish kursi")
     kb.row("💲 Sotib olish", "💰 Sotish")
     kb.row("📋 Mening buyurtmalarim", "🕒 Ish vaqti")
@@ -325,7 +325,7 @@ async def buy_wallet(message: types.Message, state: FSMContext):
     currency = data["currency"]
     amt = data["amount"]
     info = currencies[currency]
-    rate = info.get("sell_rate")  # Biz sotamiz → foydalanuvchi sotib oladi → sell_rate
+    rate = info.get("sell_rate")
     if not rate:
         await state.finish()
         return await message.answer("Narx ma'lum emas.")
@@ -433,7 +433,7 @@ async def sell_wallet(message: types.Message, state: FSMContext):
     currency = data["currency"]
     amt = data["amount"]
     info = currencies[currency]
-    rate = info.get("buy_rate")  # Biz sotib olamiz → foydalanuvchi sotadi → buy_rate
+    rate = info.get("buy_rate")
     if not rate:
         await state.finish()
         return await message.answer("Narx ma'lum emas.")
@@ -586,9 +586,6 @@ async def admin_panel(message: types.Message):
     kb.row("⬅️ Orqaga")
     await message.answer("⚙️ Admin panel:", reply_markup=kb)
     await AdminFSM.main.set()
-
-# — Qolgan admin funksiyalari (qo'shish, tahrirlash, o'chirish, xabar, qo'llanma, zaxira, balans) —
-# Ular sizning asl faylingizdagi kabi ishlaydi. Pastdagi qismni to'liq saqlab qoldim.
 
 @dp.message_handler(lambda m: m.text == "➕ Valyuta qo‘shish", state=AdminFSM.main)
 async def add_currency_code(message: types.Message):
