@@ -1,4 +1,4 @@
-# obmen_bot.py — to'liq ishlaydigan versiya (ish vaqti + admin kurslari + tugma joyi)
+# obmen_bot.py — to'liq ishlaydigan versiya (tugma hajmi, to'lov tafsilotlari, admin kurslari)
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -128,7 +128,6 @@ def is_working_hours():
 
 def main_menu_kb(uid=None):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    # ✅ TUGMALARNI JOYI ALMASHTIRILGAN
     kb.row("📉 Sotish kursi", "📈 Sotib olish kursi")
     kb.row("💲 Sotib olish", "💰 Sotish")
     kb.row("📋 Mening buyurtmalarim", "🕒 Ish vaqti")
@@ -331,10 +330,20 @@ async def buy_wallet(message: types.Message, state: FSMContext):
         return await message.answer("Narx ma'lum emas.")
     total = round(amt * float(rate), 2)
     card = info.get("sell_card", "5614 6818 7267 2690")
-    kb = types.ReplyKeyboardMarkup()
-    kb.add("Chek yuborish")
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)  # ✅ Kichikroq tugma
+    kb.add("✅ Chek yuborish")  # ✅ Matn kichikroq
     kb.add("⏹️ Bekor qilish")
-    await message.answer(f"🔔 To'lov tafsilotlari:\nKarta: {card}\nValyuta: {currency}\nMiqdor: {amt}\nNarx: {rate}\nJami: {total} UZS", reply_markup=kb)
+    # ✅ To'lov tafsilotlari matni o'zgartirildi
+    await message.answer(
+        f"🔔 *To'lov tafsilotlari (kartaga to'lov qilgach chek yuborish tugmasini bosing):*\n"
+        f"💳 Karta: {card}\n"
+        f"💱 Valyuta: {currency}\n"
+        f"🔢 Miqdor: {amt}\n"
+        f"📈 Narx: {rate}\n"
+        f"💰 Jami: {total} UZS",
+        parse_mode="Markdown",
+        reply_markup=kb
+    )
     await BuyFSM.confirm.set()
 
 @dp.message_handler(state=BuyFSM.confirm)
@@ -342,8 +351,8 @@ async def buy_confirm(message: types.Message, state: FSMContext):
     if message.text == "⏹️ Bekor qilish":
         await state.finish()
         return await message.answer("Bekor qilindi.", reply_markup=main_menu_kb())
-    if message.text != "Chek yuborish":
-        return await message.answer("‘Chek yuborish’ tugmasini bosing.")
+    if message.text != "✅ Chek yuborish":
+        return await message.answer("Iltimos, '✅ Chek yuborish' tugmasini bosing.")
     await message.answer("✅ Chekni yuboring:", reply_markup=back_kb())
     await BuyFSM.upload.set()
 
@@ -388,7 +397,7 @@ async def buy_upload(message: types.Message, state: FSMContext):
 @dp.message_handler(lambda m: m.text == "💰 Sotish")
 async def sell_start(message: types.Message):
     if not is_working_hours():
-        return await message.answer("🕗 Hozir ish vaqti emas.")
+        return await message.answer("uhlir ish vaqti emas.")
     if not currencies:
         return await message.answer("Valyuta yo'q.")
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -439,10 +448,20 @@ async def sell_wallet(message: types.Message, state: FSMContext):
         return await message.answer("Narx ma'lum emas.")
     total = round(amt * float(rate), 2)
     card = info.get("buy_card", "5614 6818 7267 2690")
-    kb = types.ReplyKeyboardMarkup()
-    kb.add("Chek yuborish")
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)  # ✅ Kichikroq tugma
+    kb.add("✅ Chek yuborish")  # ✅ Matn kichikroq
     kb.add("⏹️ Bekor qilish")
-    await message.answer(f"🔔 To'lov tafsilotlari:\nKarta: {card}\nValyuta: {currency}\nMiqdor: {amt}\nNarx: {rate}\nJami: {total} UZS", reply_markup=kb)
+    # ✅ To'lov tafsilotlari matni o'zgartirildi
+    await message.answer(
+        f"🔔 *To'lov tafsilotlari (kartaga to'lov qilgach chek yuborish tugmasini bosing):*\n"
+        f"💳 Karta: {card}\n"
+        f"💱 Valyuta: {currency}\n"
+        f"🔢 Miqdor: {amt}\n"
+        f"📉 Narx: {rate}\n"
+        f"💰 Jami: {total} UZS",
+        parse_mode="Markdown",
+        reply_markup=kb
+    )
     await SellFSM.confirm.set()
 
 @dp.message_handler(state=SellFSM.confirm)
@@ -450,8 +469,8 @@ async def sell_confirm(message: types.Message, state: FSMContext):
     if message.text == "⏹️ Bekor qilish":
         await state.finish()
         return await message.answer("Bekor qilindi.", reply_markup=main_menu_kb())
-    if message.text != "Chek yuborish":
-        return await message.answer("‘Chek yuborish’ tugmasini bosing.")
+    if message.text != "✅ Chek yuborish":
+        return await message.answer("Iltimos, '✅ Chek yuborish' tugmasini bosing.")
     await message.answer("✅ Chekni yuboring:", reply_markup=back_kb())
     await SellFSM.upload.set()
 
