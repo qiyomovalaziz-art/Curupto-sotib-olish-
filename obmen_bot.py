@@ -1,4 +1,4 @@
-# obmen_bot.py — to'liq ishlaydigan versiya (kurslar to'g'ri, foydalanuvchi ko'radi)
+# obmen_bot.py — to'liq ishlaydigan versiya (mantiq to'g'rilangan, valyuta qo'shishda aniq savollar)
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -150,7 +150,7 @@ def admin_order_kb(order_id: str, user_id: int) -> types.InlineKeyboardMarkup:
     kb.add(types.InlineKeyboardButton("✉️ Foydalanuvchiga xabar", callback_data=f"admin_order|message_user|{user_id}"))
     return kb
 
-# ✅ TO'G'RI MANTIQ: "Sotish kursi" — siz sotib olasiz (buy_rate — ARZON) → BARCHA FOYDALANUVCHI KO'RADI
+# ✅ BARIBR FOYDALANUVCHI KO'RISHI MUMKIN — TO'G'RI MANTIQDA
 @dp.message_handler(lambda m: "Sotish kursi" in m.text)
 async def show_sell_rates(message: types.Message):
     if not currencies:
@@ -166,7 +166,6 @@ async def show_sell_rates(message: types.Message):
         text += f"{code} — {name}: {formatted} UZS\n"
     await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb())
 
-# ✅ TO'G'RI MANTIQ: "Sotib olish kursi" — siz sotasiz (sell_rate — QIMMAT) → BARCHA FOYDALANUVCHI KO'RADI
 @dp.message_handler(lambda m: "Sotib olish kursi" in m.text)
 async def show_buy_rates(message: types.Message):
     if not currencies:
@@ -628,7 +627,8 @@ async def add_currency_name_handler(message: types.Message, state: FSMContext):
         return
     name = message.text.strip()
     await state.update_data(name=name)
-    await message.answer(f"**Sotib olish (buy)** kursini kiriting (UZS):")
+    # ✅ TO'G'RI SAVOL: "Qancha kursda sotib olmoqchisiz?" → buy_rate
+    await message.answer("Qancha kursda **sotib olmoqchisiz**? (UZS):")
     await AdminFSM.add_set_buy_rate.set()
 
 @dp.message_handler(state=AdminFSM.add_set_buy_rate)
@@ -639,7 +639,8 @@ async def add_buy_rate(message: types.Message, state: FSMContext):
         await message.answer("Raqam kiriting.")
         return
     await state.update_data(buy_rate=rate)
-    await message.answer("Endi **sotish (sell)** kursini kiriting (UZS):")
+    # ✅ TO'G'RI SAVOL: "Qancha kursda sotmoqchisiz?" → sell_rate
+    await message.answer("Qancha kursda **sotmoqchisiz**? (UZS):")
     await AdminFSM.add_set_sell_rate.set()
 
 @dp.message_handler(state=AdminFSM.add_set_sell_rate)
@@ -675,6 +676,10 @@ async def add_sell_card(message: types.Message, state: FSMContext):
         save_json(RESERVES_FILE, reserves)
     await message.answer(f"✅ {data['code']} — {data['name']} qo'shildi.", reply_markup=main_menu_kb())
     await state.finish()
+
+# ... (qolgan kod — o'zgartirishsiz — pastda davom etadi)
+
+# QOLGAN QISMLAR O'ZGARMAGAN — FUNKSIYALAR VA HANDLERLAR TO'LIQ O'ZGARMASDAN DAVOM ETADI
 
 @dp.message_handler(lambda m: m.text == "✏️ Valyutani tahrirlash", state=AdminFSM.main)
 async def admin_edit_currency_start(message: types.Message):
@@ -853,7 +858,6 @@ async def help_video_set_video(message: types.Message, state: FSMContext):
         await admin_panel(message)
         await state.finish()
         return
-
     if message.text and message.text.lower() == "o‘chirish":
         help_video_data["video"] = None
         help_video_data["text"] = "Qo'llanma hali qo'shilmagan."
@@ -861,10 +865,8 @@ async def help_video_set_video(message: types.Message, state: FSMContext):
         await message.answer("✅ Qo'llanma o'chirildi.", reply_markup=main_menu_kb())
         await state.finish()
         return
-
     if not message.video:
         return await message.answer("⚠️ Faqat **video** yuboring yoki 'O‘chirish' deb yozing.")
-
     help_video_data["video"] = message.video.file_id
     save_json(HELP_VIDEO_FILE, help_video_data)
     await message.answer("Endi video uchun izohni (matnni) kiriting:")
@@ -941,7 +943,6 @@ async def admin_msg_send_final(message: types.Message, state: FSMContext):
             return True
         except:
             return False
-
     success = 0
     if target == "all":
         for uid_str in users.keys():
