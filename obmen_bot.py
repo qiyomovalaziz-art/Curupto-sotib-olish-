@@ -13,7 +13,7 @@ from aiogram.dispatcher import FSMContext
 
 os.environ["TZ"] = "Asia/Tashkent"
 API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "8354205597:AAEcrLWyev71QVuYA-fVbIzsfxXEm8Wch7g")
-ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "123456789"))  # o'zgartiring
+ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "7973934849"))  # o'zgartiring
 CHANNEL_USERNAME = "@tlovchek"
 
 DATA_DIR = "bot_data"
