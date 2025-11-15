@@ -1,4 +1,4 @@
-# obmen_bot.py — to'liq ishlaydigan versiya (kurslar mantiq to'g'ri, video yuklanadi)
+# obmen_bot.py — to'liq ishlaydigan versiya (kurslar to'g'ri, foydalanuvchi ko'radi)
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -150,14 +150,12 @@ def admin_order_kb(order_id: str, user_id: int) -> types.InlineKeyboardMarkup:
     kb.add(types.InlineKeyboardButton("✉️ Foydalanuvchiga xabar", callback_data=f"admin_order|message_user|{user_id}"))
     return kb
 
-# ✅ SOTISH KURSI — biz sotib olamiz = buy_rate (PASTROQ)
+# ✅ TO'G'RI MANTIQ: "Sotish kursi" — siz sotib olasiz (buy_rate — ARZON) → BARCHA FOYDALANUVCHI KO'RADI
 @dp.message_handler(lambda m: "Sotish kursi" in m.text)
 async def show_sell_rates(message: types.Message):
-    if not is_admin(message.from_user.id):
-        return await message.answer("⛔ Bu ma'lumot faqat admin uchun.")
     if not currencies:
         return await message.answer("⚠️ Hozircha valyuta mavjud emas.")
-    text = "📉 *Sotish kurslari (Biz sotib olamiz):*\n"
+    text = "📉 *Sotish kurslari (Siz bizga sotasiz — biz arzon sotib olamiz):*\n"
     for code, info in currencies.items():
         name = info.get("name", code)
         buy_rate = info.get("buy_rate", "—")
@@ -168,14 +166,12 @@ async def show_sell_rates(message: types.Message):
         text += f"{code} — {name}: {formatted} UZS\n"
     await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb())
 
-# ✅ SOTIB OLISH KURSI — biz sotamiz = sell_rate (YUQORIROQ)
+# ✅ TO'G'RI MANTIQ: "Sotib olish kursi" — siz sotasiz (sell_rate — QIMMAT) → BARCHA FOYDALANUVCHI KO'RADI
 @dp.message_handler(lambda m: "Sotib olish kursi" in m.text)
 async def show_buy_rates(message: types.Message):
-    if not is_admin(message.from_user.id):
-        return await message.answer("⛔ Bu ma'lumot faqat admin uchun.")
     if not currencies:
         return await message.answer("⚠️ Hozircha valyuta mavjud emas.")
-    text = "📈 *Sotib olish kurslari (Biz sotamiz):*\n"
+    text = "📈 *Sotib olish kurslari (Siz bizdan sotib olasiz — biz qimmat sotasiz):*\n"
     for code, info in currencies.items():
         name = info.get("name", code)
         sell_rate = info.get("sell_rate", "—")
@@ -846,7 +842,6 @@ async def admin_card_balance_set(message: types.Message, state: FSMContext):
     await message.answer(f"✅ Karta balansi yangilandi: {amount} UZS", reply_markup=main_menu_kb())
     await state.finish()
 
-# ✅ VIDEO YUKLASH — TO'G'RI ISHLAGAN HOLATDA
 @dp.message_handler(lambda m: m.text == "🎥 Qo'llanma sozlamalari", state=AdminFSM.main)
 async def help_video_start(message: types.Message):
     await message.answer("📽️ Qo'llanma uchun videoni yuboring (yoki 'O‘chirish' deb yozing):", reply_markup=back_kb())
@@ -946,6 +941,7 @@ async def admin_msg_send_final(message: types.Message, state: FSMContext):
             return True
         except:
             return False
+
     success = 0
     if target == "all":
         for uid_str in users.keys():
