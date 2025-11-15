@@ -12,7 +12,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.dispatcher import FSMContext
 
 os.environ["TZ"] = "Asia/Tashkent"
-API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "YOUR_TOKEN_HERE")
+API_TOKEN = os.getenv("OBMEN_BOT_TOKEN", "8354205597:AAEcrLWyev71QVuYA-fVbIzsfxXEm8Wch7g")
 ADMIN_ID = int(os.getenv("OBMEN_ADMIN_ID", "123456789"))  # o'zgartiring
 CHANNEL_USERNAME = "@tlovchek"
 
