@@ -1,4 +1,4 @@
-# obmen_bot.py — to'liq ishlaydigan versiya (mantiq to'g'rilangan, valyuta qo'shishda aniq savollar)
+# obmen_bot.py — to'liq ishlaydigan versiya (valyutalar yonma-yon, mantiq to'g'ri, foydalanuvchi ko'rishi mumkin)
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -150,7 +150,12 @@ def admin_order_kb(order_id: str, user_id: int) -> types.InlineKeyboardMarkup:
     kb.add(types.InlineKeyboardButton("✉️ Foydalanuvchiga xabar", callback_data=f"admin_order|message_user|{user_id}"))
     return kb
 
-# ✅ BARIBR FOYDALANUVCHI KO'RISHI MUMKIN — TO'G'RI MANTIQDA
+# ✅ SOTISH KURSI — foydalanuvchi ko'radi, valyutalar yonma-yon emas, balki matnda chiqadi
+# Lekin siz "Sotish"/"Sotib olish" buyurtma berishda valyutalar yonma-yon chiqsin degan edingiz.
+# Shu uchun quyidagi ikkita handler o'zgarmaydi, lekin:
+# ✅ "💰 Sotish" va "💲 Sotib olish" tugmalariga bosganda — valyutalar yonma-yon chiqadi
+
+# ✅ Foydalanuvchiga kurslarni ko'rsatish
 @dp.message_handler(lambda m: "Sotish kursi" in m.text)
 async def show_sell_rates(message: types.Message):
     if not currencies:
@@ -262,6 +267,7 @@ async def my_orders(message: types.Message):
         )
     await message.answer(text, parse_mode="Markdown", reply_markup=main_menu_kb(uid))
 
+# ✅ "SOTIB OLISH" tugmasi — valyutalar yonma-yon chiqsin
 @dp.message_handler(lambda message: message.text == "💲 Sotib olish")
 async def buy_start(message: types.Message):
     if not is_working_hours():
@@ -271,12 +277,28 @@ async def buy_start(message: types.Message):
     if not available:
         await message.answer("⚠️ Zaxira yetarli emas.")
         return
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    for cur in available:
-        kb.add(cur)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
+    # ✅ Yonma-yon qo'shish
+    kb.add(*[types.KeyboardButton(cur) for cur in available])
     kb.add("⏹️ Bekor qilish")
     await message.answer("Qaysi valyutani sotib olmoqchisiz?", reply_markup=kb)
     await BuyFSM.choose_currency.set()
+
+# ✅ "SOTISH" tugmasi — valyutalar yonma-yon chiqsin
+@dp.message_handler(lambda m: m.text == "💰 Sotish")
+async def sell_start(message: types.Message):
+    if not is_working_hours():
+        return await message.answer("Hozir ish vaqti emas.")
+    if not currencies:
+        return await message.answer("Valyuta yo'q.")
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
+    # ✅ Yonma-yon qo'shish
+    kb.add(*[types.KeyboardButton(cur) for cur in currencies.keys()])
+    kb.add("⏹️ Bekor qilish")
+    await message.answer("Qaysi valyutani sotmoqchisiz?", reply_markup=kb)
+    await SellFSM.choose_currency.set()
+
+# ... (QOLGAN BARCHA FUNKSIYALAR O'ZGARMASDAN DAVOM ETADI — pastga to'liq ko'chirildi)
 
 @dp.message_handler(state=BuyFSM.choose_currency)
 async def buy_choose_currency(message: types.Message, state: FSMContext):
@@ -388,19 +410,6 @@ async def buy_upload(message: types.Message, state: FSMContext):
         return
     await message.answer("✅ Chek adminga yuborildi.", reply_markup=main_menu_kb())
     await state.finish()
-
-@dp.message_handler(lambda m: m.text == "💰 Sotish")
-async def sell_start(message: types.Message):
-    if not is_working_hours():
-        return await message.answer("Hozir ish vaqti emas.")
-    if not currencies:
-        return await message.answer("Valyuta yo'q.")
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    for cur in currencies:
-        kb.add(cur)
-    kb.add("⏹️ Bekor qilish")
-    await message.answer("Qaysi valyutani sotmoqchisiz?", reply_markup=kb)
-    await SellFSM.choose_currency.set()
 
 @dp.message_handler(state=SellFSM.choose_currency)
 async def sell_choose_currency(message: types.Message, state: FSMContext):
@@ -627,7 +636,6 @@ async def add_currency_name_handler(message: types.Message, state: FSMContext):
         return
     name = message.text.strip()
     await state.update_data(name=name)
-    # ✅ TO'G'RI SAVOL: "Qancha kursda sotib olmoqchisiz?" → buy_rate
     await message.answer("Qancha kursda **sotib olmoqchisiz**? (UZS):")
     await AdminFSM.add_set_buy_rate.set()
 
@@ -639,7 +647,6 @@ async def add_buy_rate(message: types.Message, state: FSMContext):
         await message.answer("Raqam kiriting.")
         return
     await state.update_data(buy_rate=rate)
-    # ✅ TO'G'RI SAVOL: "Qancha kursda sotmoqchisiz?" → sell_rate
     await message.answer("Qancha kursda **sotmoqchisiz**? (UZS):")
     await AdminFSM.add_set_sell_rate.set()
 
@@ -677,9 +684,7 @@ async def add_sell_card(message: types.Message, state: FSMContext):
     await message.answer(f"✅ {data['code']} — {data['name']} qo'shildi.", reply_markup=main_menu_kb())
     await state.finish()
 
-# ... (qolgan kod — o'zgartirishsiz — pastda davom etadi)
-
-# QOLGAN QISMLAR O'ZGARMAGAN — FUNKSIYALAR VA HANDLERLAR TO'LIQ O'ZGARMASDAN DAVOM ETADI
+# QOLGAN QISMLAR — O'ZGARMASDAN
 
 @dp.message_handler(lambda m: m.text == "✏️ Valyutani tahrirlash", state=AdminFSM.main)
 async def admin_edit_currency_start(message: types.Message):
